@@ -151,7 +151,7 @@ protected:
     //Pinhole testCam;
     std::mutex mMutexAtlas;
 
-    unsigned long int mnLastInitKFidMap;
+    unsigned long int mnLastInitKFidMap; ///最后初始化map的关键帧id
 
     Viewer* mpViewer;
     bool mHasViewer;

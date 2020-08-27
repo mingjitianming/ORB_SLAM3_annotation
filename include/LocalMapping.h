@@ -107,8 +107,8 @@ public:
     bool mbWriteStats;
 
     // not consider far points (clouds)
-    bool mbFarPoints;
-    float mThFarPoints;
+    bool mbFarPoints;     /// 是否远点过滤
+    float mThFarPoints;   /// 远点阀值
 protected:
 
     bool CheckNewKeyFrames();
