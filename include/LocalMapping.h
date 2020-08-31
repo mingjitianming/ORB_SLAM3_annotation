@@ -102,7 +102,7 @@ public:
 
     bool mbNotBA1;
     bool mbNotBA2;
-    bool mbBadImu;
+    bool mbBadImu;  //imu数据是否有效
 
     bool mbWriteStats;
 

@@ -84,7 +84,7 @@ Frame::Frame(const Frame &frame)
     mmMatchedInImage = frame.mmMatchedInImage;
 }
 
-
+// stereo 
 Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth, GeometricCamera* pCamera, Frame* pPrevF, const IMU::Calib &ImuCalib)
     :mpcpi(NULL), mpORBvocabulary(voc),mpORBextractorLeft(extractorLeft),mpORBextractorRight(extractorRight), mTimeStamp(timeStamp), mK(K.clone()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
      mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF),mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame*>(NULL)), mbImuPreintegrated(false),
@@ -121,7 +121,7 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     if(mvKeys.empty())
         return;
 
-    UndistortKeyPoints();
+    UndistortKeyPoints();  //? 此处不应该矫正，双目在输入时已经矫正过了
 
 #ifdef SAVE_TIMES
     std::chrono::steady_clock::time_point time_StartStereoMatches = std::chrono::steady_clock::now();
@@ -133,8 +133,9 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     mTimeStereoMatch = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndStereoMatches - time_StartStereoMatches).count();
 #endif
 
-
+    // 初始化当前帧地图点
     mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
+    // 记录地图点是否为外点，初始化均为外点false
     mvbOutlier = vector<bool>(N,false);
     mmProjectPoints.clear();// = map<long unsigned int, cv::Point2f>(N, static_cast<cv::Point2f>(NULL));
     mmMatchedInImage.clear();
@@ -165,7 +166,7 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     if(pPrevF)
     {
         if(!pPrevF->mVw.empty())
-            mVw = pPrevF->mVw.clone();
+            mVw = pPrevF->mVw.clone();   // IMU linear velocity
     }
     else
     {

@@ -224,16 +224,20 @@ void Preintegrated::CopyFrom(Preintegrated* pImuPre)
 
 void Preintegrated::Initialize(const Bias &b_)
 {
+    // R,V,P delta状态
     dR = cv::Mat::eye(3,3,CV_32F);
     dV = cv::Mat::zeros(3,1,CV_32F);
     dP = cv::Mat::zeros(3,1,CV_32F);
+    // R,V,P 分别对角速度，线加速度的雅克比
     JRg = cv::Mat::zeros(3,3,CV_32F);
     JVg = cv::Mat::zeros(3,3,CV_32F);
     JVa = cv::Mat::zeros(3,3,CV_32F);
     JPg = cv::Mat::zeros(3,3,CV_32F);
     JPa = cv::Mat::zeros(3,3,CV_32F);
+    // R V P ba bg
     C = cv::Mat::zeros(15,15,CV_32F);
     Info=cv::Mat();
+    // ba bg
     db = cv::Mat::zeros(6,1,CV_32F);
     b=b_;
     bu=b_;

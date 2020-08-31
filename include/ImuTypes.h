@@ -135,7 +135,7 @@ public:
 public:
     cv::Mat Tcb;
     cv::Mat Tbc;
-    cv::Mat Cov, CovWalk;
+    cv::Mat Cov, CovWalk; // imu协方差， 随机游走协方差
 };
 
 //Integration of 1 gyro measurement

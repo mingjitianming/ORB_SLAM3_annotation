@@ -144,7 +144,7 @@ protected:
     std::vector<Map*> mvpBackupMaps;
     Map* mpCurrentMap;
 
-    std::vector<GeometricCamera*> mvpCameras;
+    std::vector<GeometricCamera*> mvpCameras;   /// 相机类型
     std::vector<KannalaBrandt8*> mvpBackupCamKan;
     std::vector<Pinhole*> mvpBackupCamPin;
 

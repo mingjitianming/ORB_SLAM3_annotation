@@ -52,6 +52,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpAtlas(pAtlas), mnLastRelocFrameId(0), time_recently_lost(5.0),
     mnInitialFrameId(0), mbCreatedMap(false), mnFirstFrameId(0), mpCamera2(nullptr)
 {
+    // 1.加载相机参数
     // Load camera parameters from settings file
     cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
 
@@ -200,6 +201,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
     else
         cout << "- color order: BGR (ignored if grayscale)" << endl;
 
+    // 2.加载ORB参数， 创建ORBextractor
     // Load ORB parameters
 
     int nFeatures = fSettings["ORBextractor.nFeatures"];
@@ -240,6 +242,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
             mDepthMapFactor = 1.0f/mDepthMapFactor;
     }
 
+    // 3.IMU设置
     if(sensor==System::IMU_MONOCULAR || sensor==System::IMU_STEREO)
     {
         cv::Mat Tbc;
@@ -264,7 +267,7 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer,
         cout << "IMU accelerometer walk: " << Naw << " m/s^3/sqrt(Hz)" << endl;
 
         mpImuCalib = new IMU::Calib(Tbc,Ng*sf,Na*sf,Ngw/sf,Naw/sf);
-
+        // IMU预积分初始化
         mpImuPreintegratedFromLastKF = new IMU::Preintegrated(IMU::Bias(),*mpImuCalib);
 
         mnFramesToResetIMU = mMaxFrames;
@@ -590,7 +593,7 @@ void Tracking::PreintegrateIMU()
         mCurrentFrame.setIntegrated();
         return;
     }
-
+    // 1. 获取IMU数据
     while(true)
     {
         bool bSleep = false;
@@ -633,6 +636,7 @@ void Tracking::PreintegrateIMU()
     {
         float tstep;
         cv::Point3f acc, angVel;
+        // prev -> mvImuFromLastFrame 的平均 acc，angVel
         if((i==0) && (i<(n-1)))
         {
             float tab = mvImuFromLastFrame[i+1].t-mvImuFromLastFrame[i].t;
@@ -668,10 +672,11 @@ void Tracking::PreintegrateIMU()
 
         if (!mpImuPreintegratedFromLastKF)
             cout << "mpImuPreintegratedFromLastKF does not exist" << endl;
+        // 2.进行预积分
         mpImuPreintegratedFromLastKF->IntegrateNewMeasurement(acc,angVel,tstep);
         pImuPreintegratedFromLastFrame->IntegrateNewMeasurement(acc,angVel,tstep);
     }
-
+    // 3.更新预积分状态
     mCurrentFrame.mpImuPreintegratedFrame = pImuPreintegratedFromLastFrame;
     mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
     mCurrentFrame.mpLastKeyFrame = mpLastKeyFrame;
@@ -866,7 +871,8 @@ void Tracking::Track()
     }
 
     Map* pCurrentMap = mpAtlas->GetCurrentMap();
-
+    
+    // 1.Frame timestamp 异常处理
     if(mState!=NO_IMAGES_YET)
     {
         if(mLastFrame.mTimeStamp>mCurrentFrame.mTimeStamp)
