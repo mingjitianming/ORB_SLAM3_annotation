@@ -194,7 +194,7 @@ public:
 
 
     // Camera pose.
-    cv::Mat mTcw;
+    cv::Mat mTcw;  //? world to camera 
 
     // IMU linear velocity
     cv::Mat mVw;

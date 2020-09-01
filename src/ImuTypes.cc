@@ -167,13 +167,13 @@ IntegratedRotation::IntegratedRotation(const cv::Point3f &angVel, const Bias &im
                  -y,  x, 0);
     if(d<eps)
     {
-        deltaR = I + W;
+        deltaR = I + W;                                    // 公式(4)
         rightJ = cv::Mat::eye(3,3,CV_32F);
     }
     else
     {
-        deltaR = I + W*sin(d)/d + W*W*(1.0f-cos(d))/d2;
-        rightJ = I - W*(1.0f-cos(d))/d2 + W*W*(d-sin(d))/(d2*d);
+        deltaR = I + W*sin(d)/d + W*W*(1.0f-cos(d))/d2;   //罗德里格斯 公式(3)
+        rightJ = I - W*(1.0f-cos(d))/d2 + W*W*(d-sin(d))/(d2*d);   //公式(8)
     }
 }
 

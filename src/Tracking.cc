@@ -576,7 +576,7 @@ void Tracking::PreintegrateIMU()
 {
     //cout << "start preintegration" << endl;
 
-    if(!mCurrentFrame.mpPrevFrame)
+    if(!mCurrentFrame.mpPrevFrame)   // 在L986 if(mState!=OK) 中初始化,并传入Frame
     {
         Verbose::PrintMess("non prev frame ", Verbose::VERBOSITY_NORMAL);
         mCurrentFrame.setIntegrated();
@@ -967,7 +967,7 @@ void Tracking::Track()
 
         if(mState!=OK) // If rightly initialized, mState=OK
         {
-            mLastFrame = Frame(mCurrentFrame);
+            mLastFrame = Frame(mCurrentFrame);   // 此处初始化 mpPrevFrame
             return;
         }
 
@@ -1226,6 +1226,7 @@ void Tracking::Track()
         if((mCurrentFrame.mnId<(mnLastRelocFrameId+mnFramesToResetIMU)) && (mCurrentFrame.mnId > mnFramesToResetIMU) && ((mSensor == System::IMU_MONOCULAR) || (mSensor == System::IMU_STEREO)) && pCurrentMap->isImuInitialized())
         {
             // TODO check this situation
+            //？ 内存泄露
             Verbose::PrintMess("Saving pointer to frame. imu needs reset...", Verbose::VERBOSITY_NORMAL);
             Frame* pF = new Frame(mCurrentFrame);
             pF->mpPrevFrame = new Frame(mLastFrame);
@@ -1371,9 +1372,11 @@ void Tracking::Track()
 void Tracking::StereoInitialization()
 {
     if(mCurrentFrame.N>500)
-    {
+    {   
+        // 1.设置base坐标系，设置imu
         if (mSensor == System::IMU_STEREO)
         {
+            //? 初始化过程中怎么跳过这个if
             if (!mCurrentFrame.mpImuPreintegrated || !mLastFrame.mpImuPreintegrated)
             {
                 cout << "not IMU meas" << endl;
@@ -1394,22 +1397,25 @@ void Tracking::StereoInitialization()
         }
 
         // Set Frame pose to the origin (In case of inertial SLAM to imu)
+        // 将imu设为base
         if (mSensor == System::IMU_STEREO)
         {
             cv::Mat Rwb0 = mCurrentFrame.mImuCalib.Tcb.rowRange(0,3).colRange(0,3).clone();
             cv::Mat twb0 = mCurrentFrame.mImuCalib.Tcb.rowRange(0,3).col(3).clone();
             mCurrentFrame.SetImuPoseVelocity(Rwb0, twb0, cv::Mat::zeros(3,1,CV_32F));
         }
-        else
+        else  // 将camera设为base
             mCurrentFrame.SetPose(cv::Mat::eye(4,4,CV_32F));
 
         // Create KeyFrame
+        // 2.创建KeyFrame并加入地图
         KeyFrame* pKFini = new KeyFrame(mCurrentFrame,mpAtlas->GetCurrentMap(),mpKeyFrameDB);
 
         // Insert KeyFrame in the map
         mpAtlas->AddKeyFrame(pKFini);
 
         // Create MapPoints and asscoiate to KeyFrame
+        // 3.创建3D点并与KeyFrame关联
         if(!mpCamera2){
             for(int i=0; i<mCurrentFrame.N;i++)
             {
@@ -1453,6 +1459,7 @@ void Tracking::StereoInitialization()
 
         Verbose::PrintMess("New Map created with " + to_string(mpAtlas->MapPointsInMap()) + " points", Verbose::VERBOSITY_QUIET);
 
+        // 4。在局部地图中添加该初始关键帧
         mpLocalMapper->InsertKeyFrame(pKFini);
 
         mLastFrame = Frame(mCurrentFrame);
@@ -1467,7 +1474,7 @@ void Tracking::StereoInitialization()
 
         mpAtlas->SetReferenceMapPoints(mvpLocalMapPoints);
 
-        mpAtlas->GetCurrentMap()->mvpKeyFrameOrigins.push_back(pKFini);
+        mpAtlas->GetCurrentMap()->mvpKeyFrameOrigins.push_back(pKFini);  // 保存地图初始关键帧
 
         mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
@@ -1901,13 +1908,18 @@ bool Tracking::TrackWithMotionModel()
 
     // Update last frame pose according to its reference keyframe
     // Create "visual odometry" points if in Localization Mode
+    // 1.更新上一帧的位姿；对于双目或rgbd摄像头，还会根据深度值为上一关键帧生成新的MapPoints
+    // （跟踪过程中需要将当前帧与上一帧进行特征点匹配，将上一帧的MapPoints投影到当前帧可以缩小匹配范围）
+    // 在跟踪过程中，去除outlier的MapPoint，如果不及时增加MapPoint会逐渐减少
+    // 这个函数的功能就是补充增加RGBD和双目相机上一帧的MapPoints数  
+    // 那么单目的时候呢? - 单目的时候就不加呗，单目的时候只计算上一帧相对于世界坐标系的位姿
     UpdateLastFrame();
 
 
 
     if (mpAtlas->isImuInitialized() && (mCurrentFrame.mnId>mnLastRelocFrameId+mnFramesToResetIMU))
     {
-        // Predict ste with IMU if it is initialized and it doesnt need reset
+        // Predict state with IMU if it is initialized and it doesnt need reset
         PredictStateIMU();
         return true;
     }

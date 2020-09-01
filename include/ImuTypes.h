@@ -133,7 +133,7 @@ public:
     void Set(const cv::Mat &Tbc_, const float &ng, const float &na, const float &ngw, const float &naw);
 
 public:
-    cv::Mat Tcb;
+    cv::Mat Tcb;  //b to camera
     cv::Mat Tbc;
     cv::Mat Cov, CovWalk; // imu协方差， 随机游走协方差
 };
@@ -213,6 +213,7 @@ public:
     ~Preintegrated() {}
     void CopyFrom(Preintegrated* pImuPre);
     void Initialize(const Bias &b_);
+    // 预积分
     void IntegrateNewMeasurement(const cv::Point3f &acceleration, const cv::Point3f &angVel, const float &dt);
     void Reintegrate();
     void MergePrevious(Preintegrated* pPrev);
@@ -234,7 +235,7 @@ public:
 
 public:
     float dT;
-    cv::Mat C;
+    cv::Mat C;   //cov
     cv::Mat Info;
     cv::Mat Nga, NgaWalk;
 

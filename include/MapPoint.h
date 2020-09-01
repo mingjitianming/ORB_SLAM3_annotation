@@ -230,7 +230,7 @@ public:
 protected:    
 
      // Position in absolute coordinates
-     cv::Mat mWorldPos;
+     cv::Mat mWorldPos;  //mappoint的世界坐标
 
      // Keyframes observing the point and associated index in keyframe
      std::map<KeyFrame*,std::tuple<int,int> > mObservations;

@@ -513,7 +513,7 @@ protected:
     // SE3 Pose and camera center
     cv::Mat Tcw;
     cv::Mat Twc;
-    cv::Mat Ow;
+    cv::Mat Ow; // 左目坐标
     cv::Mat Cw; // Stereo middel point. Only for visualization
 
     // IMU position
@@ -589,7 +589,7 @@ public:
 
     //KeyPoints in the right image (for stereo fisheye, coordinates are needed)
     const std::vector<cv::KeyPoint> mvKeysRight;
-
+    //Number of KeyPoints extracted in the left and right images
     const int NLeft, NRight;
 
     std::vector< std::vector <std::vector<size_t> > > mGridRight;

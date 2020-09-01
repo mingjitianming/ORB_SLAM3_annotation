@@ -434,6 +434,9 @@ void Frame::SetVelocity(const cv::Mat &Vwb)
     mVw = Vwb.clone();
 }
 
+// 1.更新imu速度mVW
+// 2.更新camera pose mTcw
+// 3.更新camera位姿相关矩阵
 void Frame::SetImuPoseVelocity(const cv::Mat &Rwb, const cv::Mat &twb, const cv::Mat &Vwb)
 {
     mVw = Vwb.clone();

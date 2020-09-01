@@ -117,7 +117,7 @@ void KeyFrame::SetPose(const cv::Mat &Tcw_)
     cv::Mat Rwc = Rcw.t();
     Ow = -Rwc*tcw;
     if (!mImuCalib.Tcb.empty())
-        Owb = Rwc*mImuCalib.Tcb.rowRange(0,3).col(3)+Ow;
+        Owb = Rwc*mImuCalib.Tcb.rowRange(0,3).col(3)+Ow; //imu position
 
 
     Twc = cv::Mat::eye(4,4,Tcw.type());
