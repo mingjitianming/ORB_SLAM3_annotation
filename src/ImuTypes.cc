@@ -302,6 +302,8 @@ void Preintegrated::IntegrateNewMeasurement(const cv::Point3f &acceleration, con
     A.rowRange(0,3).colRange(0,3) = dRi.deltaR.t();
     B.rowRange(0,3).colRange(0,3) = dRi.rightJ*dt;
 
+    //小量delta初始为0，更新后通常也为0，故省略了小量的更新
+    //
     // Update covariance
     C.rowRange(0,9).colRange(0,9) = A*C.rowRange(0,9).colRange(0,9)*A.t() + B*Nga*B.t();
     C.rowRange(9,15).colRange(9,15) = C.rowRange(9,15).colRange(9,15) + NgaWalk;
