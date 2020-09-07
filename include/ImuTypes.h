@@ -151,6 +151,7 @@ public:
     cv::Mat rightJ; // right jacobian
 };
 
+// 参考论文:On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
 //Preintegration of Imu Measurements
 class Preintegrated
 {

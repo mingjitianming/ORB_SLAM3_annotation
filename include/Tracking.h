@@ -129,10 +129,10 @@ public:
 
     // Lists used to recover the full camera trajectory at the end of the execution.
     // Basically we store the reference keyframe for each frame and its relative transformation
-    list<cv::Mat> mlRelativeFramePoses;
-    list<KeyFrame*> mlpReferences;
-    list<double> mlFrameTimes;
-    list<bool> mlbLost;
+    list<cv::Mat> mlRelativeFramePoses;  // frame 与 referenceKF 的相对变换
+    list<KeyFrame*> mlpReferences;       // 相对变换的 referenceKF
+    list<double> mlFrameTimes;           // 每一相对变换的frame的time_stamp
+    list<bool> mlbLost;                  // 是否丢失
 
     // frames with estimated pose
     int mTrackedFr;
@@ -183,6 +183,7 @@ protected:
 
     bool Relocalization();
 
+    /** @brief 更新局部地图 */
     void UpdateLocalMap();
     void UpdateLocalPoints();
     void UpdateLocalKeyFrames();
@@ -225,6 +226,7 @@ protected:
     // points in the map. Still tracking will continue if there are enough matches with temporal points.
     // In that case we are doing visual odometry. The system will try to do relocalization to recover
     // "zero-drift" localization to the map.
+    ///当进行纯定位时才会有的一个变量,为false表示该帧匹配了很多的地图点,跟踪是正常的;如果少于10个则为true,表示快要完蛋了
     bool mbVO;
 
     //Other Thread Pointers
@@ -294,7 +296,7 @@ protected:
     unsigned int mnInitialFrameId;
     unsigned int mnLastInitFrameId;
 
-    bool mbCreatedMap;
+    bool mbCreatedMap; // 是否是新创建的map，用于避免新地图的first frame的imu预积分
 
 
     //Motion Model

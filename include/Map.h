@@ -77,9 +77,27 @@ public:
     ~Map();
 
     void AddKeyFrame(KeyFrame* pKF);
+
     void AddMapPoint(MapPoint* pMP);
+    /**
+     * @brief 从地图中擦除地图点
+     * 
+     * @param[in] pMP 地图点
+     */
     void EraseMapPoint(MapPoint* pMP);
+    /**
+     * @brief 从地图中删除关键帧
+     * @detials 实际上这个函数中目前仅仅是删除了在std::set中保存的地图点的指针,并且删除后
+     * 之前的地图点所占用的内存其实并没有得到释放
+     * @param[in] pKF 关键帧
+     */
     void EraseKeyFrame(KeyFrame* pKF);
+     /**
+     * @brief 设置参考地图点
+     * @detials 一般是指,设置当前帧中的参考地图点; 这些点将用于DrawMapPoints函数画图
+     * 
+     * @param[in] vpMPs 地图点们
+     */
     void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
     void InformNewBigChange();
     int GetLastBigChangeIdx();
@@ -173,7 +191,7 @@ protected:
 
     unsigned long int mnBackupKFinitialID;
     unsigned long int mnBackupKFlowerID;
-
+    //参考地图点 localmap points
     std::vector<MapPoint*> mvpReferenceMapPoints;
 
     bool mbImuInitialized;

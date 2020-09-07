@@ -779,17 +779,29 @@ void KeyFrameDatabase::DetectNBestCandidates(KeyFrame *pKF, vector<KeyFrame*> &v
     }*/
 }
 
-
+/*
+ * @brief 在重定位中找到与该帧相似的关键帧
+ * 1. 找出和当前帧具有公共单词的所有关键帧
+ * 2. 只和具有共同单词较多的关键帧进行相似度计算
+ * 3. 将与关键帧相连（权值最高）的前十个关键帧归为一组，计算累计得分
+ * 4. 只返回累计得分较高的组中分数最高的关键帧
+ * @param F 需要重定位的帧
+ * @return  相似的关键帧
+ * @see III-E Bags of Words Place Recognition
+ */
 vector<KeyFrame*> KeyFrameDatabase::DetectRelocalizationCandidates(Frame *F, Map* pMap)
 {
-    list<KeyFrame*> lKFsSharingWords;
+    // 相对于关键帧的闭环检测DetectLoopCandidates，重定位检测中没法获得相连的关键帧
+    list<KeyFrame*> lKFsSharingWords; // 用于保存可能与F形成回环的候选帧（只要有相同的word，且不属于局部相连帧(这里其实已经没有了所谓的"局部相连帧"的概念了)
 
     // Search all keyframes that share a word with current frame
+    //. 步骤1：找出和当前帧具有公共单词的所有关键帧
     {
         unique_lock<mutex> lock(mMutex);
-
+        // words是检测图像是否匹配的枢纽，遍历该F的每一个word
         for(DBoW2::BowVector::const_iterator vit=F->mBowVec.begin(), vend=F->mBowVec.end(); vit != vend; vit++)
         {
+            // 提取所有包含该word的KeyFrame
             list<KeyFrame*> &lKFs =   mvInvertedFile[vit->first];
 
             for(list<KeyFrame*>::iterator lit=lKFs.begin(), lend= lKFs.end(); lit!=lend; lit++)
@@ -809,6 +821,7 @@ vector<KeyFrame*> KeyFrameDatabase::DetectRelocalizationCandidates(Frame *F, Map
         return vector<KeyFrame*>();
 
     // Only compare against those keyframes that share enough words
+    // 步骤2：统计所有闭环候选帧中与当前帧F具有共同单词最多的单词数，并以此决定阈值
     int maxCommonWords=0;
     for(list<KeyFrame*>::iterator lit=lKFsSharingWords.begin(), lend= lKFsSharingWords.end(); lit!=lend; lit++)
     {
@@ -823,6 +836,7 @@ vector<KeyFrame*> KeyFrameDatabase::DetectRelocalizationCandidates(Frame *F, Map
     int nscores=0;
 
     // Compute similarity score.
+    // 步骤3：遍历所有闭环候选帧，挑选出共有单词数大于阈值minCommonWords且单词匹配度大于minScore存入lScoreAndMatch
     for(list<KeyFrame*>::iterator lit=lKFsSharingWords.begin(), lend= lKFsSharingWords.end(); lit!=lend; lit++)
     {
         KeyFrame* pKFi = *lit;
@@ -843,21 +857,25 @@ vector<KeyFrame*> KeyFrameDatabase::DetectRelocalizationCandidates(Frame *F, Map
     float bestAccScore = 0;
 
     // Lets now accumulate score by covisibility
+    // 步骤4：计算候选帧组得分，得到最高组得分bestAccScore，并以此决定阈值minScoreToRetain
+    // 单单计算当前帧和某一关键帧的相似性是不够的，这里将与关键帧相连（权值最高，共视程度最高）的前十个关键帧归为一组，计算累计得分
+    // 具体而言：lScoreAndMatch中每一个KeyFrame都把与自己共视程度较高的帧归为一组，每一组会计算组得分并记录该组分数最高的KeyFrame，记录于lAccScoreAndMatch
     for(list<pair<float,KeyFrame*> >::iterator it=lScoreAndMatch.begin(), itend=lScoreAndMatch.end(); it!=itend; it++)
     {
         KeyFrame* pKFi = it->second;
         vector<KeyFrame*> vpNeighs = pKFi->GetBestCovisibilityKeyFrames(10);
 
-        float bestScore = it->first;
-        float accScore = bestScore;
-        KeyFrame* pBestKF = pKFi;
+        float bestScore = it->first;    // 该组最高分数
+        float accScore = bestScore;     // 该组累计得分
+        KeyFrame* pBestKF = pKFi;       // 该组最高分数对应的关键帧
         for(vector<KeyFrame*>::iterator vit=vpNeighs.begin(), vend=vpNeighs.end(); vit!=vend; vit++)
         {
             KeyFrame* pKF2 = *vit;
-            if(pKF2->mnRelocQuery!=F->mnId)
+            if(pKF2->mnRelocQuery!=F->mnId) // 只有pKF2也在闭环候选帧中，才能贡献分数
                 continue;
 
             accScore+=pKF2->mRelocScore;
+            // 统计得到组里分数最高的KeyFrame
             if(pKF2->mRelocScore>bestScore)
             {
                 pBestKF=pKF2;
@@ -871,6 +889,7 @@ vector<KeyFrame*> KeyFrameDatabase::DetectRelocalizationCandidates(Frame *F, Map
     }
 
     // Return all those keyframes with a score higher than 0.75*bestScore
+    // 步骤5：得到组得分大于阈值的，组内得分最高的关键帧
     float minScoreToRetain = 0.75f*bestAccScore;
     set<KeyFrame*> spAlreadyAddedKF;
     vector<KeyFrame*> vpRelocCandidates;
@@ -878,12 +897,13 @@ vector<KeyFrame*> KeyFrameDatabase::DetectRelocalizationCandidates(Frame *F, Map
     for(list<pair<float,KeyFrame*> >::iterator it=lAccScoreAndMatch.begin(), itend=lAccScoreAndMatch.end(); it!=itend; it++)
     {
         const float &si = it->first;
+        // 只返回累计得分大于minScoreToRetain的组中分数最高的关键帧 0.75*bestScore
         if(si>minScoreToRetain)
         {
             KeyFrame* pKFi = it->second;
             if (pKFi->GetMap() != pMap)
                 continue;
-            if(!spAlreadyAddedKF.count(pKFi))
+            if(!spAlreadyAddedKF.count(pKFi)) // 判断该pKFi是否已经在队列中了
             {
                 vpRelocCandidates.push_back(pKFi);
                 spAlreadyAddedKF.insert(pKFi);

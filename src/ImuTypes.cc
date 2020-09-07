@@ -256,8 +256,15 @@ void Preintegrated::Reintegrate()
         IntegrateNewMeasurement(aux[i].a,aux[i].w,aux[i].t);
 }
 
+// 1.保存imu数据
+// 2.矫正加速度、角速度
+// 3.更新dP，dV  eq.(38)
+// 4.计算delta_x 的线性矩阵 eq.(62)
+// 5.更新bias雅克比 APPENDIX-A
+// 6.更新协方差
 void Preintegrated::IntegrateNewMeasurement(const cv::Point3f &acceleration, const cv::Point3f &angVel, const float &dt)
 {
+    // 1.保存imu数据
     mvMeasurements.push_back(integrable(acceleration,angVel,dt));
 
     // Position is updated firstly, as it depends on previously computed velocity and rotation.
@@ -267,7 +274,7 @@ void Preintegrated::IntegrateNewMeasurement(const cv::Point3f &acceleration, con
     //Matrices to compute covariance
     cv::Mat A = cv::Mat::eye(9,9,CV_32F);
     cv::Mat B = cv::Mat::zeros(9,6,CV_32F);
-
+    // 2.矫正加速度、角速度
     cv::Mat acc = (cv::Mat_<float>(3,1) << acceleration.x-b.bax,acceleration.y-b.bay, acceleration.z-b.baz);
     cv::Mat accW = (cv::Mat_<float>(3,1) << angVel.x-b.bwx, angVel.y-b.bwy, angVel.z-b.bwz);
 
@@ -275,10 +282,12 @@ void Preintegrated::IntegrateNewMeasurement(const cv::Point3f &acceleration, con
     avgW = (dT*avgW + accW*dt)/(dT+dt);
 
     // Update delta position dP and velocity dV (rely on no-updated delta rotation)
+    // 3.更新dP，dV  eq.(38)
     dP = dP + dV*dt + 0.5f*dR*acc*dt*dt;
     dV = dV + dR*acc*dt;
 
     // Compute velocity and position parts of matrices A and B (rely on non-updated delta rotation)
+    // 4.计算delta_x 的线性矩阵 eq.(62)
     cv::Mat Wacc = (cv::Mat_<float>(3,3) << 0, -acc.at<float>(2), acc.at<float>(1),
                                                    acc.at<float>(2), 0, -acc.at<float>(0),
                                                    -acc.at<float>(1), acc.at<float>(0), 0);
@@ -289,6 +298,7 @@ void Preintegrated::IntegrateNewMeasurement(const cv::Point3f &acceleration, con
     B.rowRange(6,9).colRange(3,6) = 0.5f*dR*dt*dt;
 
     // Update position and velocity jacobians wrt bias correction
+    // 5.更新bias雅克比 APPENDIX-A
     JPa = JPa + JVa*dt -0.5f*dR*dt*dt;
     JPg = JPg + JVg*dt -0.5f*dR*dt*dt*Wacc*JRg;
     JVa = JVa - dR*dt;
@@ -302,9 +312,10 @@ void Preintegrated::IntegrateNewMeasurement(const cv::Point3f &acceleration, con
     A.rowRange(0,3).colRange(0,3) = dRi.deltaR.t();
     B.rowRange(0,3).colRange(0,3) = dRi.rightJ*dt;
 
-    //小量delta初始为0，更新后通常也为0，故省略了小量的更新
-    //
+    //*小量delta初始为0，更新后通常也为0，故省略了小量的更新
+    
     // Update covariance
+    // 6.更新协方差
     C.rowRange(0,9).colRange(0,9) = A*C.rowRange(0,9).colRange(0,9)*A.t() + B*Nga*B.t();
     C.rowRange(9,15).colRange(9,15) = C.rowRange(9,15).colRange(9,15) + NgaWalk;
 
@@ -360,6 +371,7 @@ IMU::Bias Preintegrated::GetDeltaBias(const Bias &b_)
     return IMU::Bias(b_.bax-b.bax,b_.bay-b.bay,b_.baz-b.baz,b_.bwx-b.bwx,b_.bwy-b.bwy,b_.bwz-b.bwz);
 }
 
+// 过去更新bias后的delta_R
 cv::Mat Preintegrated::GetDeltaRotation(const Bias &b_)
 {
     std::unique_lock<std::mutex> lock(mMutex);
