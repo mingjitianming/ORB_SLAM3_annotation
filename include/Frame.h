@@ -240,7 +240,7 @@ public:
 
     static bool mbInitialComputations;
 
-    map<long unsigned int, cv::Point2f> mmProjectPoints;
+    map<long unsigned int, cv::Point2f> mmProjectPoints;  // 从localMap中的mappoints投影的u,v
     map<long unsigned int, cv::Point2f> mmMatchedInImage;
 
     string mNameFile;

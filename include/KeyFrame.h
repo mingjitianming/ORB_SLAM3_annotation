@@ -334,8 +334,20 @@ public:
     void AddMapPoint(MapPoint* pMP, const size_t &idx);
     void EraseMapPointMatch(const int &idx);
     void EraseMapPointMatch(MapPoint* pMP);
+     /**
+     * @brief 地图点的替换
+     * @param[in] idx 要替换掉的地图点的索引
+     * @param[in] pMP 新地图点的指针
+     */
     void ReplaceMapPointMatch(const int &idx, MapPoint* pMP);
+     /**
+     * @brief 获取当前帧中的所有地图点
+     * @return std::set<MapPoint*> 所有的地图点
+     */
     std::set<MapPoint*> GetMapPoints();
+     /**
+     * @brief Get MapPoint Matches 获取该关键帧的MapPoints
+     */
     std::vector<MapPoint*> GetMapPointMatches();
     int TrackedMapPoints(const int &minObs);
     MapPoint* GetMapPoint(const size_t &idx);
@@ -532,14 +544,15 @@ protected:
 
     // BoW
     KeyFrameDatabase* mpKeyFrameDB;
+    // 词袋对象
     ORBVocabulary* mpORBvocabulary;
 
     // Grid over the image to speed up feature matching
     std::vector< std::vector <std::vector<size_t> > > mGrid;
 
-    std::map<KeyFrame*,int> mConnectedKeyFrameWeights;
-    std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames;
-    std::vector<int> mvOrderedWeights;
+    std::map<KeyFrame*,int> mConnectedKeyFrameWeights;      ///< 与该关键帧连接的关键帧与权重
+    std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames;    ///< 排序后的关键帧,和下面的这个变量相对应
+    std::vector<int> mvOrderedWeights;                      ///< 排序后的权重(从大到小)
     // For save relation without pointer, this is necessary for save/load function
     std::map<long unsigned int, int> mBackupConnectedKeyFrameIdWeights;
 

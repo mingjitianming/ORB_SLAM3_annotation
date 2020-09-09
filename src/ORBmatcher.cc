@@ -1958,6 +1958,22 @@ int ORBmatcher::SearchBySim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint*> &
     return nFound;
 }
 
+/**
+ * @brief 将上一帧跟踪的地图点投影到当前帧，并且搜索匹配点。用于跟踪前一帧
+ * 步骤
+ * Step 1 建立旋转直方图，用于检测旋转一致性
+ * Step 2 计算当前帧和前一帧的平移向量
+ * Step 3 对于前一帧的每一个地图点，通过相机投影模型，得到投影到当前帧的像素坐标
+ * Step 4 根据相机的前后前进方向来判断搜索尺度范围
+ * Step 5 遍历候选匹配点，寻找距离最小的最佳匹配点 
+ * Step 6 计算匹配点旋转角度差所在的直方图
+ * Step 7 进行旋转一致检测，剔除不一致的匹配
+ * @param[in] CurrentFrame          当前帧
+ * @param[in] LastFrame             上一帧
+ * @param[in] th                    搜索范围阈值，默认单目为7，双目15
+ * @param[in] bMono                 是否为单目
+ * @return int                      成功匹配的数量
+ */
     int ORBmatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float th, const bool bMono)
     {
         int nmatches = 0;

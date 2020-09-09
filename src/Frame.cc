@@ -32,6 +32,9 @@
 
 namespace ORB_SLAM3
 {
+/*
+ * TODO:作者这里类的Nleft与Nright可能有些混淆，实际使用时注意更正
+ **/
 
 long unsigned int Frame::nNextId=0;
 bool Frame::mbInitialComputations=true;
@@ -69,7 +72,7 @@ Frame::Frame(const Frame &frame)
     for(int i=0;i<FRAME_GRID_COLS;i++)
         for(int j=0; j<FRAME_GRID_ROWS; j++){
             mGrid[i][j]=frame.mGrid[i][j];
-            if(frame.Nleft > 0){
+            if(frame.Nleft > 0){  //FIXME:Nright??
                 mGridRight[i][j] = frame.mGridRight[i][j];
             }
         }
@@ -379,7 +382,7 @@ void Frame::AssignFeaturesToGrid()
     for(unsigned int i=0; i<FRAME_GRID_COLS;i++)
         for (unsigned int j=0; j<FRAME_GRID_ROWS;j++){
             mGrid[i][j].reserve(nReserve);
-            if(Nleft != -1){
+            if(Nleft != -1){  //FIXME: Nright??
                 mGridRight[i][j].reserve(nReserve);
             }
         }

@@ -182,6 +182,12 @@ protected:
 
     void CheckReplacedInLastFrame();
     bool TrackReferenceKeyFrame();
+    /**
+    * @brief 双目或rgbd摄像头根据深度值为上一帧产生新的MapPoints
+    *
+    * 在双目和rgbd情况下，选取一些深度小一些的点（可靠一些） \n
+    * 可以通过深度值产生一些新的MapPoints,用来补充当前视野中的地图点数目,这些新补充的地图点就被称之为"临时地图点""
+    */
     void UpdateLastFrame();
     bool TrackWithMotionModel();
     bool PredictStateIMU();
@@ -195,6 +201,11 @@ protected:
 
     bool TrackLocalMap();
     bool TrackLocalMap_old();
+    /**
+    * @brief 对 Local MapPoints 进行跟踪
+    * 
+    * 在局部地图中查找在当前帧视野范围内的点，将视野范围内的点和当前帧的特征点进行投影匹配
+    */
     void SearchLocalPoints();
 
     bool NeedNewKeyFrame();
@@ -209,7 +220,7 @@ protected:
     void ComputeVelocitiesAccBias(const vector<Frame*> &vpFs, float &bax,  float &bay, float &baz);
 
 
-    bool mbMapUpdated;
+    bool mbMapUpdated;  //map是否已更新
 
     // Imu preintegration from last frame
     IMU::Preintegrated *mpImuPreintegratedFromLastKF;
