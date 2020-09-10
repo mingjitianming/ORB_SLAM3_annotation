@@ -5073,6 +5073,9 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
 
 }
 
+// 1.进行矩阵变换，调整边缘化变量位置，编号(0,1,2)：1,2行交换，1,2列交换
+// 2.执行边缘化操作:Schur complement
+// 3.恢复矩阵：1,2行交换，1,2列交换
 Eigen::MatrixXd Optimizer::Marginalize(const Eigen::MatrixXd &H, const int &start, const int &end)
 {
     // Goal
@@ -5087,7 +5090,8 @@ Eigen::MatrixXd Optimizer::Marginalize(const Eigen::MatrixXd &H, const int &star
     // Size of block after block to marginalize
     const int c = H.cols() - (end+1);
 
-    // Reorder as follows:
+    // 1.进行矩阵变换，调整边缘化变量位置，编号(0,1,2)：1,2行交换，1,2列交换
+    // Reorder as follows: 
     // a  | ab | ac       a  | ac | ab
     // ba | b  | bc  -->  ca | c  | cb
     // ca | cb | c        ba | bc | b
@@ -5113,6 +5117,7 @@ Eigen::MatrixXd Optimizer::Marginalize(const Eigen::MatrixXd &H, const int &star
     Hn.block(a+c,a+c,b,b) = H.block(a,a,b,b);
 
     // Perform marginalization (Schur complement)
+    // 2.执行边缘化操作:Schur complement
     Eigen::JacobiSVD<Eigen::MatrixXd> svd(Hn.block(a+c,a+c,b,b),Eigen::ComputeThinU | Eigen::ComputeThinV);
     Eigen::JacobiSVD<Eigen::MatrixXd>::SingularValuesType singularValues_inv=svd.singularValues();
     for (int i=0; i<b; ++i)
@@ -5127,6 +5132,7 @@ Eigen::MatrixXd Optimizer::Marginalize(const Eigen::MatrixXd &H, const int &star
     Hn.block(0,a+c,a+c,b) = Eigen::MatrixXd::Zero(a+c,b);
     Hn.block(a+c,0,b,a+c) = Eigen::MatrixXd::Zero(b,a+c);
 
+    // 3.恢复矩阵：1,2行交换，1,2列交换
     // Inverse reorder
     // a*  | ac* | 0       a*  | 0 | ac*
     // ca* | c*  | 0  -->  0   | 0 | 0
@@ -7947,10 +7953,10 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
 
     nInitialCorrespondences = nInitialMonoCorrespondences + nInitialStereoCorrespondences;
 
-    // Step 4：添加imu优化边
+    // Step 4：添加imu优化
     // Set Previous Frame Vertex
     Frame* pFp = pFrame->mpPrevFrame;
-
+    // Step 4.1 添加上一帧状态信息顶点
     VertexPose* VPk = new VertexPose(pFp);
     VPk->setId(4);
     VPk->setFixed(false);
@@ -7968,7 +7974,8 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
     VAk->setFixed(false);
     optimizer.addVertex(VAk);
 
-    EdgeInertial* ei = new EdgeInertial(pFrame->mpImuPreintegratedFrame);
+    // Step 4.2 创建imu预积分的优化边
+    EdgeInertial* ei = new EdgeInertial(pFrame->mpImuPreintegratedFrame); //计算预积分与两个frame状态的残差及雅克比，进行优化求解
 
     ei->setVertex(0, VPk);
     ei->setVertex(1, VVk);
@@ -7977,7 +7984,9 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
     ei->setVertex(4, VP); //添加了双向边有什么用??
     ei->setVertex(5, VV);
     optimizer.addEdge(ei);
-
+    
+    // Step 4.3 添加角速度和线加速度的优化边
+    // 假设两帧间的角速度不变
     EdgeGyroRW* egr = new EdgeGyroRW();
     egr->setVertex(0,VGk);
     egr->setVertex(1,VG);
@@ -7989,6 +7998,7 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
     egr->setInformation(InfoG);
     optimizer.addEdge(egr);
 
+    // 假设两帧间的线加速度不变
     EdgeAccRW* ear = new EdgeAccRW();
     ear->setVertex(0,VAk);
     ear->setVertex(1,VA);
@@ -8002,7 +8012,7 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
 
     if (!pFp->mpcpi)
         Verbose::PrintMess("pFp->mpcpi does not exist!!!\nPrevious Frame " + to_string(pFp->mnId), Verbose::VERBOSITY_NORMAL);
-
+    // // Step 4.4 添加与之前pose的优化边
     EdgePriorPoseImu* ep = new EdgePriorPoseImu(pFp->mpcpi);
 
     ep->setVertex(0,VPk);
@@ -8016,10 +8026,13 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
 
     // We perform 4 optimizations, after each optimization we classify observation as inlier/outlier
     // At the next optimization, outliers are not included, but at the end they can be classified as inliers again.
-
-    const float chi2Mono[4]={5.991,5.991,5.991,5.991};
-    const float chi2Stereo[4]={15.6f,9.8f,7.815f,7.815f};
-    const int its[4]={10,10,10,10};
+    // Step 5：开始优化，总共优化四次，每次优化迭代10次,每次优化后，将观测分为outlier和inlier，outlier不参与下次优化
+    // 由于每次优化后是对所有的观测进行outlier和inlier判别，因此之前被判别为outlier有可能变成inlier，反之亦然
+    
+    // 基于卡方检验计算出的阈值（假设测量有一个像素的偏差）
+    const float chi2Mono[4]={5.991,5.991,5.991,5.991};     // 单目
+    const float chi2Stereo[4]={15.6f,9.8f,7.815f,7.815f};  //双目
+    const int its[4]={10,10,10,10};     // 四次迭代，每次迭代的次数
 
     int nBad=0;
     int nBadMono = 0;
@@ -8029,7 +8042,9 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
     int nInliers=0;
     for(size_t it=0; it<4; it++)
     {
+        // 其实就是初始化优化器,这里的参数0就算是不填写,默认也是0,也就是只对level为0的边进行优化
         optimizer.initializeOptimization(0);
+        // 开始优化，优化10次
         optimizer.optimize(its[it]);
 
         nBad=0;
@@ -8040,6 +8055,7 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
         nInliersStereo=0;
         float chi2close = 1.5*chi2Mono[it];
 
+        // 优化结束,开始遍历参与优化的每一条误差边(单目)
         for(size_t i=0, iend=vpEdgesMono.size(); i<iend; i++)
         {
             EdgeMonoOnlyPose* e = vpEdgesMono[i];
@@ -8047,6 +8063,7 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
             const size_t idx = vnIndexEdgeMono[i];
             bool bClose = pFrame->mvpMapPoints[idx]->mTrackDepth<10.f;
 
+            // 如果这条误差边是来自于outlier
             if(pFrame->mvbOutlier[idx])
             {
                 e->computeError();
@@ -8057,21 +8074,22 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
             if((chi2>chi2Mono[it]&&!bClose)||(bClose && chi2>chi2close)||!e->isDepthPositive())
             {
                 pFrame->mvbOutlier[idx]=true;
-                e->setLevel(1);
+                e->setLevel(1);             // 设置为outlier , level 1 对应为外点,上面的过程中我们设置其为不优化
                 nBadMono++;
             }
             else
             {
                 pFrame->mvbOutlier[idx]=false;
-                e->setLevel(0);
+                e->setLevel(0);             // 设置为inlier, level 0 对应为内点,上面的过程中我们就是要优化这些关系
                 nInliersMono++;
             }
 
             if (it==2)
-                e->setRobustKernel(0);
+                e->setRobustKernel(0);  // 除了前两次优化需要RobustKernel以外, 其余的优化都不需要 -- 因为重投影的误差已经有明显的下降了
 
         }
 
+        // 遍历双目的误差边
         for(size_t i=0, iend=vpEdgesStereo.size(); i<iend; i++)
         {
             EdgeStereoOnlyPose* e = vpEdgesStereo[i];
@@ -8147,12 +8165,14 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
 
 
     // Recover optimized pose, velocity and biases
+    // Step 6:获取当前帧优化后的状态
     pFrame->SetImuPoseVelocity(Converter::toCvMat(VP->estimate().Rwb),Converter::toCvMat(VP->estimate().twb),Converter::toCvMat(VV->estimate()));
     Vector6d b;
     b << VG->estimate(), VA->estimate();
     pFrame->mImuBias = IMU::Bias(b[3],b[4],b[5],b[0],b[1],b[2]);
 
     // Recover Hessian, marginalize previous frame states and generate new prior for frame
+    // 获得优化后的海塞矩阵，边缘化上一帧
     Eigen::Matrix<double,30,30> H;
     H.setZero();
 

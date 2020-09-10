@@ -628,7 +628,7 @@ public:
 };
 
 
-
+// 假设两帧间的角速度不变
 class EdgeGyroRW : public g2o::BaseBinaryEdge<3,Eigen::Vector3d,VertexGyroBias,VertexGyroBias>
 {
 public:
@@ -664,7 +664,7 @@ public:
     }
 };
 
-
+// 假设两帧间的线加速度不变
 class EdgeAccRW : public g2o::BaseBinaryEdge<3,Eigen::Vector3d,VertexAccBias,VertexAccBias>
 {
 public:

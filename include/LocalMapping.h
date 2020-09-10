@@ -149,6 +149,7 @@ protected:
 
     KeyFrame* mpCurrentKeyFrame;
 
+    /// 存储当前关键帧生成的地图点,也是等待检查的地图点列表
     std::list<MapPoint*> mlpRecentAddedMapPoints;
 
     std::mutex mMutexNewKFs;

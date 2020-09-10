@@ -208,6 +208,10 @@ protected:
     */
     void SearchLocalPoints();
 
+     /**
+     * @brief 断当前帧是否为关键帧
+     * @return true if needed
+     */
     bool NeedNewKeyFrame();
     void CreateNewKeyFrame();
 

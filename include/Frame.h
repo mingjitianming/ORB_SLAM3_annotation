@@ -123,6 +123,8 @@ public:
     // Backprojects a keypoint (if stereo/depth info available) into 3D world coordinates.
     cv::Mat UnprojectStereo(const int &i);
 
+    // imu约束
+    // 在Optimizer::PoseInertialOptimizationLastFrame和Optimizer::PoseInertialOptimizationLastKeyFrame中赋值
     ConstraintPoseImu* mpcpi;
 
     bool imuIsPreintegrated();

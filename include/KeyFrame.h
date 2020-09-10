@@ -304,6 +304,7 @@ public:
     void AddConnection(KeyFrame* pKF, const int &weight);
     void EraseConnection(KeyFrame* pKF);
 
+    /** @brief 更新图的连接  */
     void UpdateConnections(bool upParent=true);
     void UpdateBestCovisibles();
     std::set<KeyFrame *> GetConnectedKeyFrames();
@@ -349,6 +350,12 @@ public:
      * @brief Get MapPoint Matches 获取该关键帧的MapPoints
      */
     std::vector<MapPoint*> GetMapPointMatches();
+    /**
+    * @brief 关键帧中，大于等于minObs的MapPoints的数量
+    * @details minObs就是一个阈值，大于minObs就表示该MapPoint是一个高质量的MapPoint \n
+    * 一个高质量的MapPoint会被多个KeyFrame观测到.
+    * @param  minObs 最小观测
+    */
     int TrackedMapPoints(const int &minObs);
     MapPoint* GetMapPoint(const size_t &idx);
 
@@ -557,10 +564,10 @@ protected:
     std::map<long unsigned int, int> mBackupConnectedKeyFrameIdWeights;
 
     // Spanning Tree and Loop Edges
-    bool mbFirstConnection;
-    KeyFrame* mpParent;
-    std::set<KeyFrame*> mspChildrens;
-    std::set<KeyFrame*> mspLoopEdges;
+    bool mbFirstConnection;             // 是否是第一次生成树
+    KeyFrame* mpParent;                 // 当前关键帧的父关键帧 （共视程度最高的）
+    std::set<KeyFrame*> mspChildrens;   // 存储当前关键帧的子关键帧
+    std::set<KeyFrame*> mspLoopEdges;   // 和当前关键帧形成回环关系的关键帧
     std::set<KeyFrame*> mspMergeEdges;
     // For save relation without pointer, this is necessary for save/load function
     long long int mBackupParentId;

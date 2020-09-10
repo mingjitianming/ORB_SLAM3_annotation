@@ -739,6 +739,7 @@ void EdgeInertial::computeError()
     _error << er, ev, ep;
 }
 
+// 计算残差方程对状态增量的雅克比，此处将对rotation和translation的雅克比表示为pose的雅克比
 void EdgeInertial::linearizeOplus()
 {
     const VertexPose* VP1 = static_cast<const VertexPose*>(_vertices[0]);
