@@ -305,7 +305,7 @@ void LocalMapping::InsertKeyFrame(KeyFrame *pKF)
     mbAbortBA=true;
 }
 
-
+// 查看列表中是否有等待被插入的关键帧
 bool LocalMapping::CheckNewKeyFrames()
 {
     unique_lock<mutex> lock(mMutexNewKFs);
@@ -1383,13 +1383,18 @@ bool LocalMapping::isFinished()
     return mbFinished;
 }
 
+/*
+ *@brief:获得好的imu初始化值：velocities，gravity direction and IMU biases
+ *priorG: gyro先验
+ *priorA: acc先验
+ */
 void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 {
     if (mbResetRequested)
         return;
 
-    float minTime;
-    int nMinKF;
+    float minTime;  // 初始化需要的最小时间间隔
+    int nMinKF;     // 初始化需要的最少关键帧数
     if (mbMonocular)
     {
         minTime = 2.0;
@@ -1406,6 +1411,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
         return;
 
     // Retrieve all keyframe in temporal order
+    // Step 1:按时间顺序收集初始化使用的imu
     list<KeyFrame*> lpKF;
     KeyFrame* pKF = mpCurrentKeyFrame;
     while(pKF->mPrevKF)
@@ -1418,7 +1424,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 
     if(vpKF.size()<nMinKF)
         return;
-
+    // imu计算初始时间
     mFirstTs=vpKF.front()->mTimeStamp;
     if(mpCurrentKeyFrame->mTimeStamp-mFirstTs<minTime)
         return;
@@ -1432,33 +1438,41 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
         lpKF.push_back(mpCurrentKeyFrame);
     }
 
-    const int N = vpKF.size();
+    const int N = vpKF.size();  // 待处理的关键帧数目
     IMU::Bias b(0,0,0,0,0,0);
 
     // Compute and KF velocities mRwg estimation
+    // Step 2:估计KF速度和重力方向
     if (!mpCurrentKeyFrame->GetMap()->isImuInitialized())
     {
         cv::Mat cvRwg;
-        cv::Mat dirG = cv::Mat::zeros(3,1,CV_32F);
+        cv::Mat dirG = cv::Mat::zeros(3,1,CV_32F);  // 重力方向
         for(vector<KeyFrame*>::iterator itKF = vpKF.begin(); itKF!=vpKF.end(); itKF++)
         {
             if (!(*itKF)->mpImuPreintegrated)
                 continue;
             if (!(*itKF)->mPrevKF)
                 continue;
-
+            // 预积分中delta_V 用来表示:Rwb_i.transpose()*(V2 - V1 - g*dt),故此处获得 -(V_i - V_0 - (i-0)*(mRwg*gI)*dt)
+            // 应该使用将速度偏差在此处忽略或当做噪声，因为后面会优化mRwg
             dirG -= (*itKF)->mPrevKF->GetImuRotation()*(*itKF)->mpImuPreintegrated->GetUpdatedDeltaVelocity();
             cv::Mat _vel = ((*itKF)->GetImuPosition() - (*itKF)->mPrevKF->GetImuPosition())/(*itKF)->mpImuPreintegrated->dT;
             (*itKF)->SetVelocity(_vel);
             (*itKF)->mPrevKF->SetVelocity(_vel);
         }
 
+        // Step 2.1:计算重力方向(与z轴偏差)，用轴角方式表示偏差
         dirG = dirG/cv::norm(dirG);
-        cv::Mat gI = (cv::Mat_<float>(3,1) << 0.0f, 0.0f, -1.0f);
+        cv::Mat gI = (cv::Mat_<float>(3,1) << 0.0f, 0.0f, -1.0f); //沿-z的归一化的重力数值
+        // dirG和gI的模长都是1,故cross为sin，dot为cos
+        
+        // 计算旋转轴
         cv::Mat v = gI.cross(dirG);
         const float nv = cv::norm(v);
+        // 计算旋转角
         const float cosg = gI.dot(dirG);
         const float ang = acos(cosg);
+        // 计算mRwg，与-Z旋转偏差
         cv::Mat vzg = v*ang/nv;
         cvRwg = IMU::ExpSO3(vzg);
         mRwg = Converter::toMatrix3d(cvRwg);
@@ -1475,6 +1489,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 
     mInitTime = mpTracker->mLastFrame.mTimeStamp-vpKF.front()->mTimeStamp;
 
+    // Step 3:进行惯性优化
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
     Optimizer::InertialOptimization(mpAtlas->GetCurrentMap(), mRwg, mScale, mbg, mba, mbMonocular, infoInertial, false, false, priorG, priorA);
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
@@ -1483,7 +1498,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     cout << "bg after inertial-only optimization: " << mbg << endl;
     cout << "ba after inertial-only optimization: " << mba << endl;*/
 
-
+    // 如果求解的scale过小，跳过，下次在优化
     if (mScale<1e-1)
     {
         cout << "scale too small" << endl;
@@ -1494,6 +1509,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 
 
     // Before this line we are not changing the map
+    // 上面的程序没有改变地图，下面会对地图进行修改
 
     unique_lock<mutex> lock(mpAtlas->GetCurrentMap()->mMutexMapUpdate);
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();

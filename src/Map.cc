@@ -286,6 +286,7 @@ void Map::RotateMap(const cv::Mat &R)
     }
 }
 
+// 对地图数据应用相似变换
 void Map::ApplyScaledRotation(const cv::Mat &R, const float s, const bool bScaledVel, const cv::Mat t)
 {
     unique_lock<mutex> lock(mMutexMap);

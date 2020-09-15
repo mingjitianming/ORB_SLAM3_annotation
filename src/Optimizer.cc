@@ -5194,8 +5194,13 @@ Eigen::MatrixXd Optimizer::Sparsify(const Eigen::MatrixXd &H, const int &start1,
     return Hac+Hbc-Hc;
 }
 
-
-void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &scale, Eigen::Vector3d &bg, Eigen::Vector3d &ba, bool bMono, Eigen::MatrixXd  &covInertial, bool bFixedVel, bool bGauss, float priorG, float priorA)
+/*
+@brief imu初始化时使用，优化gravity方向，ba，bg，scale
+ */
+void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &scale, 
+                                     Eigen::Vector3d &bg, Eigen::Vector3d &ba, 
+                                     bool bMono, Eigen::MatrixXd  &covInertial, 
+                                     bool bFixedVel, bool bGauss, float priorG, float priorA)
 {
     Verbose::PrintMess("inertial optimization", Verbose::VERBOSITY_NORMAL);
     int its = 200; // Check number of iterations
@@ -5203,6 +5208,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     const vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();
 
     // Setup optimizer
+    // Step 1: 设置优化器
     g2o::SparseOptimizer optimizer;
     g2o::BlockSolverX::LinearSolverType * linearSolver;
 
@@ -5217,8 +5223,9 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
 
     optimizer.setAlgorithm(solver);
 
-
+    // Step 2: 设置优化顶点
     // Set KeyFrame vertices (fixed poses and optimizable velocities)
+    // Step 2.1: 设置KeyFrame vertices,其中pose固定不被优化，velocity是否优化可选
     for(size_t i=0; i<vpKFs.size(); i++)
     {
         KeyFrame* pKFi = vpKFs[i];
@@ -5240,6 +5247,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     }
 
     // Biases
+    // Step 2.2: 设置gyroBias，AccBias vertices，此处假设用于初始化的数据拥有相同的bias
     VertexGyroBias* VG = new VertexGyroBias(vpKFs.front());
     VG->setId(maxKFid*2+2);
     if (bFixedVel)
@@ -5256,6 +5264,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
 
     optimizer.addVertex(VA);
     // prior acc bias
+    // Step 2.3: 设置先验边
     EdgePriorAcc* epa = new EdgePriorAcc(cv::Mat::zeros(3,1,CV_32F));
     epa->setVertex(0,dynamic_cast<g2o::OptimizableGraph::Vertex*>(VA));
     double infoPriorA = priorA;
@@ -5268,6 +5277,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     optimizer.addEdge(epg);
 
     // Gravity and scale
+    // Step 2.4: 设置Gravity and scale vertices
     VertexGDir* VGDir = new VertexGDir(Rwg);
     VGDir->setId(maxKFid*2+4);
     VGDir->setFixed(false);
@@ -5278,7 +5288,9 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     optimizer.addVertex(VS);
 
     // Graph edges
+    // Step 3: 设置优化边
     // IMU links with gravity and scale
+    // Step 3.1: 设置gravity和scale的边
     vector<EdgeInertialGS*> vpei;
     vpei.reserve(vpKFs.size());
     vector<pair<KeyFrame*,KeyFrame*> > vppUsedKF;
@@ -5332,6 +5344,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     // Compute error for different scales
     std::set<g2o::HyperGraph::Edge*> setEdges = optimizer.edges();
 
+    // Step 4: 求解
     std::cout << "start optimization" << std::endl;
     optimizer.setVerbose(false);
     optimizer.initializeOptimization();
@@ -5339,8 +5352,7 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
 
     std::cout << "end optimization" << std::endl;
 
-    scale = VS->estimate();
-
+    // Step 5: 获取优化后的变量
     // Recover optimized data
     // Biases
     VG = static_cast<VertexGyroBias*>(optimizer.vertex(maxKFid*2+2));
@@ -8224,11 +8236,12 @@ int Optimizer::PoseInertialOptimizationLastFrame(Frame *pFrame, bool bRecInit)
     }
 
     H = Marginalize(H,0,14);
-
+    // Step 7:填充当前帧的imu位姿约束
     pFrame->mpcpi = new ConstraintPoseImu(VP->estimate().Rwb,VP->estimate().twb,VV->estimate(),VG->estimate(),VA->estimate(),H.block<15,15>(15,15));
     delete pFp->mpcpi;
     pFp->mpcpi = NULL;
 
+    // 并且返回内点数目
     return nInitialCorrespondences-nBad;
 }
 

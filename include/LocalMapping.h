@@ -82,17 +82,17 @@ public:
     std::mutex mMutexImuInit;
 
     Eigen::MatrixXd mcovInertial;
-    Eigen::Matrix3d mRwg;
+    Eigen::Matrix3d mRwg;       /// 重力方向
     Eigen::Vector3d mbg;
     Eigen::Vector3d mba;
     double mScale;
-    double mInitTime;
+    double mInitTime;   /// 未使用
     double mCostTime;
     bool mbNewInit;
     unsigned int mInitSect;
     unsigned int mIdxInit;
     unsigned int mnKFs;
-    double mFirstTs;
+    double mFirstTs;   /// 用于imu初始化第一个可用关键帧的时间
     int mnMatchesInliers;
 
     // For debugging (erase in normal mode)
@@ -125,8 +125,8 @@ protected:
 
     System *mpSystem;
 
-    bool mbMonocular;
-    bool mbInertial;
+    bool mbMonocular;   // 是否为单目
+    bool mbInertial;    // 是否使用imu
 
     void ResetIfRequested();
     bool mbResetRequested;

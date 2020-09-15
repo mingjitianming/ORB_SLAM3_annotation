@@ -541,7 +541,8 @@ public:
 };
 
 
-// Edge inertial whre gravity is included as optimizable variable and it is not supposed to be pointing in -z axis, as well as scale
+// imu初始化使用的约束
+// Edge inertial where gravity is included as optimizable variable and it is not supposed to be pointing in -z axis, as well as scale
 class EdgeInertialGS : public g2o::BaseMultiEdge<9,Vector9d>
 {
 public:
