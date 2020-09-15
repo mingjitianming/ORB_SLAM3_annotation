@@ -1513,6 +1513,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 
     unique_lock<mutex> lock(mpAtlas->GetCurrentMap()->mMutexMapUpdate);
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+    // Step 4:在非双目，且scale有变化时，更新地图
     if ((fabs(mScale-1.f)>0.00001)||!mbMonocular)
     {
         mpAtlas->GetCurrentMap()->ApplyScaledRotation(Converter::toCvMat(mRwg).t(),mScale,true);
