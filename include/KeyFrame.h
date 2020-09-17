@@ -425,7 +425,9 @@ public:
     long unsigned int mnFuseTargetForKF;
 
     // Variables used by the local mapping
+    // local mapping中记录当前处理的关键帧的mnId，表示当前局部BA的关键帧id。mnBALocalForKF 在map point.h里面也有同名的变量。
     long unsigned int mnBALocalForKF;
+    // local mapping中记录当前处理的关键帧的mnId, 只是提供约束信息但是却不会去优化这个关键帧
     long unsigned int mnBAFixedForKF;
 
     //Number of optimizations by BA(amount of iterations in BA)
@@ -450,11 +452,11 @@ public:
 
     // Variables used by loop closing
     cv::Mat mTcwGBA;  // 经过全局BA优化后的相机的位姿
-    cv::Mat mTcwBefGBA;
+    cv::Mat mTcwBefGBA; // 进行全局BA优化之前的当前关键帧的位姿. 之所以要记录这个是因为在全局优化之后还要根据该关键帧在优化之前的位姿来更新地图点,which地图点的参考关键帧就是该关键帧
     cv::Mat mVwbGBA;
     cv::Mat mVwbBefGBA;
     IMU::Bias mBiasGBA;
-    long unsigned int mnBAGlobalForKF;
+    long unsigned int mnBAGlobalForKF; // 记录是由于哪个"当前关键帧"触发的全局BA,用来防止重复写入的事情发生(浪费时间)
 
     // Variables used by merging
     cv::Mat mTcwMerge;

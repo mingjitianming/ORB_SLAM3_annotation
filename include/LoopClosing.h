@@ -130,21 +130,27 @@ protected:
     Atlas* mpAtlas;
     Tracking* mpTracker;
 
+    /// 关键帧数据库
     KeyFrameDatabase* mpKeyFrameDB;
+    /// 词袋模型中的大字典
     ORBVocabulary* mpORBVocabulary;
 
     LocalMapping *mpLocalMapper;
 
-    std::list<KeyFrame*> mlpLoopKeyFrameQueue;
+    /// 一个队列, 其中存储了参与到回环检测的关键帧 (当然这些关键帧也有可能因为各种原因被设置成为bad,这样虽然这个关键帧还是存储在这里但是实际上已经不再实质性地参与到回环检测的过程中去了)
+    std::list<KeyFrame*> mlpLoopKeyFrameQueue;    
 
     std::mutex mMutexLoopQueue;
 
     // Loop detector parameters
+    /// 连续性阈值,构造函数中将其设置成为了3
     float mnCovisibilityConsistencyTh;
 
     // Loop detector variables
+    /// 当前关键帧,其实称之为"当前正在处理的关键帧"更加合适
     KeyFrame* mpCurrentKF;
     KeyFrame* mpLastCurrentKF;
+    // 最终检测出来的,和当前关键帧形成闭环的闭环关键帧
     KeyFrame* mpMatchedKF;
     std::vector<ConsistentGroup> mvConsistentGroups;
     std::vector<KeyFrame*> mvpEnoughConsistentCandidates;
@@ -155,7 +161,7 @@ protected:
     g2o::Sim3 mg2oScw;
 
     //-------
-    Map* mpLastMap;
+    Map* mpLastMap;         /// 最新的map
 
     bool mbLoopDetected;
     int mnLoopNumCoincidences;
