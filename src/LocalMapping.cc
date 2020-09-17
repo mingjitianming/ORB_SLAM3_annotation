@@ -144,6 +144,7 @@ void LocalMapping::Run()
                         float dist = cv::norm(mpCurrentKeyFrame->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->GetCameraCenter()) +
                                 cv::norm(mpCurrentKeyFrame->mPrevKF->mPrevKF->GetCameraCenter() - mpCurrentKeyFrame->mPrevKF->GetCameraCenter());
 
+                        // 距离够大，则计入imu初始化,并记录时间
                         if(dist>0.05)
                             mTinit += mpCurrentKeyFrame->mTimeStamp - mpCurrentKeyFrame->mPrevKF->mTimeStamp;
                         if(!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
@@ -159,6 +160,7 @@ void LocalMapping::Run()
                         }
 
                         bool bLarge = ((mpTracker->GetMatchesInliers()>75)&&mbMonocular)||((mpTracker->GetMatchesInliers()>100)&&!mbMonocular);
+                        // 注意这里的第二个参数是按地址传递的,当这里的 mbAbortBA 状态发生变化时，能够及时执行/停止BA
                         Optimizer::LocalInertialBA(mpCurrentKeyFrame, &mbAbortBA, mpCurrentKeyFrame->GetMap(), bLarge, !mpCurrentKeyFrame->GetMap()->GetIniertialBA2());
                     }
                     else
@@ -173,6 +175,7 @@ void LocalMapping::Run()
                 t5 = std::chrono::steady_clock::now();
 
                 // Initialize IMU here
+                // Step 7 初始化IMU，确定scale，gravity，bias
                 if(!mpCurrentKeyFrame->GetMap()->isImuInitialized() && mbInertial)
                 {
                     if (mbMonocular)
@@ -183,12 +186,13 @@ void LocalMapping::Run()
 
 
                 // Check redundant local Keyframes
-                // Step 7 检测并剔除当前帧相邻的关键帧中冗余的关键帧
+                // Step 8 检测并剔除当前帧相邻的关键帧中冗余的关键帧
                 // 冗余的判定：该关键帧的90%的地图点可以被其它关键帧观测到
                 KeyFrameCulling();
 
                 t6 = std::chrono::steady_clock::now();
 
+                // Step 9: IMU参数分时间进行优化求解
                 if ((mTinit<100.0f) && mbInertial)
                 {
                     if(mpCurrentKeyFrame->GetMap()->isImuInitialized() && mpTracker->mState==Tracking::OK) // Enter here everytime local-mapping is called
@@ -230,7 +234,7 @@ void LocalMapping::Run()
                                 (mTinit>75.0f && mTinit<75.5f))){
                             cout << "start scale ref" << endl;
                             if (mbMonocular)
-                                ScaleRefinement();
+                                ScaleRefinement();  // 在有较好的先验参数后进行的修正
                             cout << "end scale ref" << endl;
                         }
                     }
@@ -239,7 +243,7 @@ void LocalMapping::Run()
 
             std::chrono::steady_clock::time_point t7 = std::chrono::steady_clock::now();
 
-            // Step 8 将当前帧加入到闭环检测队列中
+            // Step 10 将当前帧加入到闭环检测队列中
             // 注意这里的关键帧被设置成为了bad的情况,这个需要注意
             mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
             std::chrono::steady_clock::time_point t8 = std::chrono::steady_clock::now();
@@ -1105,13 +1109,29 @@ void LocalMapping::InterruptBA()
     mbAbortBA = true;
 }
 
+/**
+ * @brief 检测当前关键帧在共视图中的关键帧，根据地图点在共视图中的冗余程度剔除该共视关键帧
+ * 冗余关键帧的判定：90%以上的地图点能被其他关键帧（至少3个）观测到
+ */
 void LocalMapping::KeyFrameCulling()
 {
     // Check redundant keyframes (only local keyframes)
     // A keyframe is considered redundant if the 90% of the MapPoints it sees, are seen
     // in at least other 3 keyframes (in the same or finer scale)
     // We only consider close stereo points
+    
+    // 该函数里变量层层深入，这里列一下：
+    // mpCurrentKeyFrame：当前关键帧，本程序就是判断它是否需要删除
+    // pKF： mpCurrentKeyFrame的某一个共视关键帧
+    // vpMapPoints：pKF对应的所有地图点
+    // pMP：vpMapPoints中的某个地图点
+    // observations：所有能观测到pMP的关键帧
+    // pKFi：observations中的某个关键帧
+    // scaleLeveli：pKFi的金字塔尺度
+    // scaleLevel：pKF的金字塔尺度
+    // 
     const int Nd = 21; // MODIFICATION_STEREO_IMU 20 This should be the same than that one from LIBA
+    // Step 1：根据共视图提取当前关键帧的所有共视关键帧
     mpCurrentKeyFrame->UpdateBestCovisibles();
     vector<KeyFrame*> vpLocalKeyFrames = mpCurrentKeyFrame->GetVectorCovisibleKeyFrames();
 
@@ -1141,7 +1161,7 @@ void LocalMapping::KeyFrameCulling()
     }
 
 
-
+    // 对所有的共视关键帧进行遍历
     for(vector<KeyFrame*>::iterator vit=vpLocalKeyFrames.begin(), vend=vpLocalKeyFrames.end(); vit!=vend; vit++)
     {
         count++;
@@ -1149,12 +1169,16 @@ void LocalMapping::KeyFrameCulling()
 
         if((pKF->mnId==pKF->GetMap()->GetInitKFid()) || pKF->isBad())
             continue;
+        // Step 2：提取每个共视关键帧的地图点
         const vector<MapPoint*> vpMapPoints = pKF->GetMapPointMatches();
 
+        // 记录某个点被观测次数，后面并未使用
         int nObs = 3;
-        const int thObs=nObs;
-        int nRedundantObservations=0;
+        const int thObs=nObs;           // 观测次数阈值，默认为3
+        int nRedundantObservations=0;   // 记录冗余观测点的数目
         int nMPs=0;
+
+        // Step 3：遍历该共视关键帧的所有地图点，判断是否90%以上的地图点能被其它至少3个关键帧（同样或者更低层级）观测到
         for(size_t i=0, iend=vpMapPoints.size(); i<iend; i++)
         {
             MapPoint* pMP = vpMapPoints[i];
@@ -1164,18 +1188,22 @@ void LocalMapping::KeyFrameCulling()
                 {
                     if(!mbMonocular)
                     {
+                        // 对于双目，仅考虑近处（不超过基线的 35倍 ）的地图点
                         if(pKF->mvDepth[i]>pKF->mThDepth || pKF->mvDepth[i]<0)
                             continue;
                     }
 
                     nMPs++;
+                    // pMP->Observations() 是观测到该地图点的相机总数目（单目1，双目2）
                     if(pMP->Observations()>thObs)
                     {
                         const int &scaleLevel = (pKF -> NLeft == -1) ? pKF->mvKeysUn[i].octave
                                                                      : (i < pKF -> NLeft) ? pKF -> mvKeys[i].octave
                                                                                           : pKF -> mvKeysRight[i].octave;
+                        // Observation存储的是可以看到该地图点的所有关键帧的集合
                         const map<KeyFrame*, tuple<int,int>> observations = pMP->GetObservations();
                         int nObs=0;
+                        // 遍历观测到该地图点的关键帧
                         for(map<KeyFrame*, tuple<int,int>>::const_iterator mit=observations.begin(), mend=observations.end(); mit!=mend; mit++)
                         {
                             KeyFrame* pKFi = mit->first;
@@ -1197,13 +1225,17 @@ void LocalMapping::KeyFrameCulling()
                                 }
                             }
 
+                            // 尺度约束：为什么pKF 尺度+1 要大于等于 pKFi 尺度？
+                            // 回答：因为同样或更低金字塔层级的地图点更准确
                             if(scaleLeveli<=scaleLevel+1)
                             {
                                 nObs++;
+                                // 已经找到3个满足条件的关键帧，就停止不找了
                                 if(nObs>thObs)
                                     break;
                             }
                         }
+                        // 地图点至少被3个关键帧观测到，就记录为冗余点，更新冗余点计数数目
                         if(nObs>thObs)
                         {
                             nRedundantObservations++;
@@ -1213,6 +1245,7 @@ void LocalMapping::KeyFrameCulling()
             }
         }
 
+        // Step 4：该关键帧90%以上的有效地图点被判断为冗余的，则删除该关键帧
         if(nRedundantObservations>redundant_th*nMPs)
         {
             if (mbInertial)
@@ -1387,6 +1420,7 @@ bool LocalMapping::isFinished()
  *@brief:获得好的imu初始化值：velocities，gravity direction and IMU biases
  *priorG: gyro先验
  *priorA: acc先验
+ *bFIBA : 是否进行FullInertialBA
  */
 void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 {
@@ -1411,7 +1445,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
         return;
 
     // Retrieve all keyframe in temporal order
-    // Step 1:按时间顺序收集初始化使用的imu
+    // Step 1:按时间顺序收集初始化imu使用的KF
     list<KeyFrame*> lpKF;
     KeyFrame* pKF = mpCurrentKeyFrame;
     while(pKF->mPrevKF)
@@ -1491,6 +1525,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 
     // Step 3:进行惯性优化
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+    // 使用camera初始地图frame的pose与预积分的差值优化
     Optimizer::InertialOptimization(mpAtlas->GetCurrentMap(), mRwg, mScale, mbg, mba, mbMonocular, infoInertial, false, false, priorG, priorA);
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
 
@@ -1522,6 +1557,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
 
     // Check if initialization OK
+    // Step 4:更新关键帧中imu状态
     if (!mpAtlas->isImuInitialized())
         for(int i=0;i<N;i++)
         {
@@ -1533,6 +1569,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     cout << "ba: " << mpCurrentKeyFrame->GetAccBias() << endl;
     cout << "bg: " << mpCurrentKeyFrame->GetGyroBias() << endl;*/
 
+    // Step 5: 进行完全惯性优化(包括MapPoints)
     std::chrono::steady_clock::time_point t4 = std::chrono::steady_clock::now();
     if (bFIBA)
     {
@@ -1544,21 +1581,23 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
 
     std::chrono::steady_clock::time_point t5 = std::chrono::steady_clock::now();
 
+    // Step 6: 设置当前map imu 已经初始化 
     // If initialization is OK
     mpTracker->UpdateFrameIMU(1.0,vpKF[0]->GetImuBias(),mpCurrentKeyFrame);
     if (!mpAtlas->isImuInitialized())
     {
         cout << "IMU in Map " << mpAtlas->GetCurrentMap()->GetId() << " is initialized" << endl;
         mpAtlas->SetImuInitialized();
-        mpTracker->t0IMU = mpTracker->mCurrentFrame.mTimeStamp;
+        mpTracker->t0IMU = mpTracker->mCurrentFrame.mTimeStamp;  // 设置imu初始化时间
         mpCurrentKeyFrame->bImu = true;
     }
 
-
+    //更新记录初始化状态的变量
     mbNewInit=true;
     mnKFs=vpKF.size();
     mIdxInit++;
 
+    // Step 7: 清除KF待处理列表中剩余的KF
     for(list<KeyFrame*>::iterator lit = mlNewKeyFrames.begin(), lend=mlNewKeyFrames.end(); lit!=lend; lit++)
     {
         (*lit)->SetBadFlag();
@@ -1583,6 +1622,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     return;
 }
 
+// 注释参考InitializeIMU
 void LocalMapping::ScaleRefinement()
 {
     // Minimum number of keyframes to compute a solution

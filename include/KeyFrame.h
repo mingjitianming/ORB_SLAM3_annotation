@@ -403,7 +403,7 @@ public:
     void SetORBVocabulary(ORBVocabulary* pORBVoc);
     void SetKeyFrameDatabase(KeyFrameDatabase* pKFDB);
 
-    bool bImu;
+    bool bImu;  //是否经过imu尺度优化
 
     // The following variables are accesed from only 1 thread or never change (no mutex needed).
 public:
@@ -449,7 +449,7 @@ public:
 
 
     // Variables used by loop closing
-    cv::Mat mTcwGBA;
+    cv::Mat mTcwGBA;  // 经过全局BA优化后的相机的位姿
     cv::Mat mTcwBefGBA;
     cv::Mat mVwbGBA;
     cv::Mat mVwbBefGBA;

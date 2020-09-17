@@ -215,8 +215,8 @@ protected:
     bool mbBad = false;
 
     bool mbIsInertial;  // 是否使用imu
-    bool mbIMU_BA1;
-    bool mbIMU_BA2;
+    bool mbIMU_BA1;     // 前5秒数据，用来初始化有先验的imu
+    bool mbIMU_BA2;     // 前15秒数据，用来初始化先验为0的imu
 
     std::mutex mMutexMap;
 };

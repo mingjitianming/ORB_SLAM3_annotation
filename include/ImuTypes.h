@@ -216,6 +216,7 @@ public:
     void Initialize(const Bias &b_);
     // 预积分
     void IntegrateNewMeasurement(const cv::Point3f &acceleration, const cv::Point3f &angVel, const float &dt);
+    // 重新进行积分
     void Reintegrate();
     void MergePrevious(Preintegrated* pPrev);
     void SetNewBias(const Bias &bu_);

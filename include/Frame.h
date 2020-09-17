@@ -127,6 +127,7 @@ public:
     // 在Optimizer::PoseInertialOptimizationLastFrame和Optimizer::PoseInertialOptimizationLastKeyFrame中赋值
     ConstraintPoseImu* mpcpi;
 
+    // 是否完成预积分
     bool imuIsPreintegrated();
     void setIntegrated();
 

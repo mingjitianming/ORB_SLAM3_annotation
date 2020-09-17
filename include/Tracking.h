@@ -312,7 +312,7 @@ protected:
     double mTimeStampLost;
     double time_recently_lost;
 
-    unsigned int mnFirstFrameId;
+    unsigned int mnFirstFrameId;  //当前地图的第一个Frame
     unsigned int mnInitialFrameId;
     unsigned int mnLastInitFrameId;
 

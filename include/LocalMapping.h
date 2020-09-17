@@ -88,10 +88,10 @@ public:
     double mScale;
     double mInitTime;   /// 未使用
     double mCostTime;
-    bool mbNewInit;
+    bool mbNewInit;     /// 当前地图的imu初始化完成
     unsigned int mInitSect;
-    unsigned int mIdxInit;
-    unsigned int mnKFs;
+    unsigned int mIdxInit;  /// map_imu初始化的index
+    unsigned int mnKFs; /// 初始化imu时的KF num
     double mFirstTs;   /// 用于imu初始化第一个可用关键帧的时间
     int mnMatchesInliers;
 
@@ -145,8 +145,9 @@ protected:
     LoopClosing* mpLoopCloser;
     Tracking* mpTracker;
 
-    std::list<KeyFrame*> mlNewKeyFrames;
-
+    // Tracking线程向LocalMapping中插入关键帧是先插入到该队列中
+    std::list<KeyFrame*> mlNewKeyFrames;  ///< 等待处理的关键帧列表
+    /// 当前正在处理的关键帧
     KeyFrame* mpCurrentKeyFrame;
 
     /// 存储当前关键帧生成的地图点,也是等待检查的地图点列表
@@ -176,7 +177,7 @@ protected:
     int mNumLM;
     int mNumKFCulling;
 
-    float mTinit;
+    float mTinit;  // 用于IMU初始化的时间
 
     int countRefinement;
 
