@@ -3895,6 +3895,7 @@ void Tracking::UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame* pCurr
     unsigned int index = mnFirstFrameId;
     list<ORB_SLAM3::KeyFrame*>::iterator lRit = mlpReferences.begin();
     list<bool>::iterator lbL = mlbLost.begin();
+    // Step 1:更新相对位姿集合的尺度信息
     for(list<cv::Mat>::iterator lit=mlRelativeFramePoses.begin(),lend=mlRelativeFramePoses.end();lit!=lend;lit++, lRit++, lbL++)
     {
         if(*lbL)
@@ -3913,6 +3914,7 @@ void Tracking::UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame* pCurr
         }
     }
 
+    // Step 2:更新imu信息
     mLastBias = b;
 
     mpLastKeyFrame = pCurrentKeyFrame;
@@ -3925,14 +3927,15 @@ void Tracking::UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame* pCurr
     cv::Mat twb1;
     cv::Mat Rwb1;
     cv::Mat Vwb1;
-    float t12;
+    float t12;  // 时间间隔
 
     while(!mCurrentFrame.imuIsPreintegrated())
     {
         usleep(500);
     }
 
-
+    // Step 2:更新Frame的pose velocity
+    // Step 2.1:更新lastFrame的pose velocity
     if(mLastFrame.mnId == mLastFrame.mpLastKeyFrame->mnFrameId)
     {
         mLastFrame.SetImuPoseVelocity(mLastFrame.mpLastKeyFrame->GetImuRotation(),
@@ -3950,7 +3953,7 @@ void Tracking::UpdateFrameIMU(const float s, const IMU::Bias &b, KeyFrame* pCurr
                                       twb1 + Vwb1*t12 + 0.5f*t12*t12*Gz+ Rwb1*mLastFrame.mpImuPreintegrated->GetUpdatedDeltaPosition(),
                                       Vwb1 + Gz*t12 + Rwb1*mLastFrame.mpImuPreintegrated->GetUpdatedDeltaVelocity());
     }
-
+    // Step 2.2:更新currentFrame的pose velocity
     if (mCurrentFrame.mpImuPreintegrated)
     {
         twb1 = mCurrentFrame.mpLastKeyFrame->GetImuPosition();

@@ -164,23 +164,30 @@ protected:
     Map* mpLastMap;         /// 最新的map
 
     bool mbLoopDetected;
-    int mnLoopNumCoincidences;
+    int mnLoopNumCoincidences;  // 对候选组位姿优化后，候选组匹配出的MapPoints对CKF的共视帧同样有效的共视帧数目
     int mnLoopNumNotFound;
     KeyFrame* mpLoopLastCurrentKF;
     g2o::Sim3 mg2oLoopSlw;
     g2o::Sim3 mg2oLoopScw;
+    /// 最终检测出来的,和当前关键帧形成闭环的闭环关键帧
     KeyFrame* mpLoopMatchedKF;
+    /// 在闭环帧及其共视帧中的闭环MapPoints
     std::vector<MapPoint*> mvpLoopMPs;
+    /// 在闭环帧及其共视帧中的重投影匹配的闭环MapPoints
     std::vector<MapPoint*> mvpLoopMatchedMPs;
     bool mbMergeDetected;
+    // 对候选组位姿优化后，候选组匹配出的MapPoints对CKF的共视帧同样有效的共视帧数目
     int mnMergeNumCoincidences;
     int mnMergeNumNotFound;
     KeyFrame* mpMergeLastCurrentKF;
     g2o::Sim3 mg2oMergeSlw;
     g2o::Sim3 mg2oMergeSmw;
     g2o::Sim3 mg2oMergeScw;
+    /// 最终检测出来的,和当前关键帧形成闭环的地图合并关键帧
     KeyFrame* mpMergeMatchedKF;
+    /// 在合并帧及其共视帧中的合并MapPoints
     std::vector<MapPoint*> mvpMergeMPs;
+    /// 在合并帧及其共视帧中的重投影匹配的合并MapPoints
     std::vector<MapPoint*> mvpMergeMatchedMPs;
     std::vector<KeyFrame*> mvpMergeConnectedKFs;
 

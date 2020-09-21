@@ -306,7 +306,15 @@ public:
 
     /** @brief 更新图的连接  */
     void UpdateConnections(bool upParent=true);
+    /**
+     * @brief 按照权重对连接的关键帧进行排序
+     * @detials 更新后的变量存储在mvpOrderedConnectedKeyFrames和mvOrderedWeights中
+     */
     void UpdateBestCovisibles();
+    /**
+     * @brief 得到与该关键帧连接的关键帧(没有排序的)
+     * @return 连接的关键帧
+     */
     std::set<KeyFrame *> GetConnectedKeyFrames();
     std::vector<KeyFrame* > GetVectorCovisibleKeyFrames();
     std::vector<KeyFrame*> GetBestCovisibilityKeyFrames(const int &N);
@@ -443,8 +451,11 @@ public:
     long unsigned int mnMergeQuery;
     int mnMergeWords;
     float mMergeScore;
+    /// 标记了当前关键帧是id为mnPlaceRecognitionQuery的回环检测的候选关键帧
     long unsigned int mnPlaceRecognitionQuery;
+    /// 当前关键帧和这个形成回环的候选关键帧中,具有相同word的个数  
     int mnPlaceRecognitionWords;
+    /// 和那个形成回环的关键帧的词袋匹配程度的评分
     float mPlaceRecognitionScore;
 
     bool mbCurrentPlaceRecognition;

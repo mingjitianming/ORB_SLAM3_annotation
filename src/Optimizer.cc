@@ -4564,12 +4564,13 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     const int Nd = std::min((int)pCurrentMap->KeyFramesInMap()-2,maxOpt);
     const unsigned long maxKFid = pKF->mnId;
 
+    // Step 1:收集惯性相关优化的关键帧
     vector<KeyFrame*> vpOptimizableKFs;  // 用于预积分优化的KF
     // 找到关键帧连接的共视关键帧（一级相连帧)
     const vector<KeyFrame*> vpNeighsKFs = pKF->GetVectorCovisibleKeyFrames();
     list<KeyFrame*> lpOptVisKFs;  // 用于视觉优化的KF
 
-    // 获取惯性优化关键帧
+    // Step 1.1:：获取惯性优化关键帧
     vpOptimizableKFs.reserve(Nd);
     vpOptimizableKFs.push_back(pKF);
     pKF->mnBALocalForKF = pKF->mnId;
@@ -4587,7 +4588,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     int N = vpOptimizableKFs.size();
 
     // Optimizable points seen by temporal optimizable keyframes
-    // 获取惯性关键帧的MapPoints
+    // Step 1.2:获取惯性关键帧的MapPoints
     list<MapPoint*> lLocalMapPoints;
     for(int i=0; i<N; i++)
     {
@@ -4606,7 +4607,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     }
 
     // Fixed Keyframe: First frame previous KF to optimization window)
-    // 设置惯性优化部分固定关键帧
+    // Step 1.3:设置惯性优化部分固定关键帧
     list<KeyFrame*> lFixedKeyFrames;  // 只提供约束不优化的KF
     if(vpOptimizableKFs.back()->mPrevKF)
     {
@@ -4622,7 +4623,8 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     }
 
     // Optimizable visual KFs
-    // 获取待优化的KF和MapPoints
+    // Step 2:收集视觉优化的关键帧
+    // Step 2.1:获取待优化的KF和MapPoints
     const int maxCovKF = 0;
     for(int i=0, iend=vpNeighsKFs.size(); i<iend; i++)
     {
@@ -4653,7 +4655,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     }
 
     // Fixed KFs which are not covisible optimizable
-    // 获取只提供约束不优化的共视KF
+    // Step 2.1:获取只提供约束不优化的固定共视KF
     const int maxFixKF = 200;
 
     for(list<MapPoint*>::iterator lit=lLocalMapPoints.begin(), lend=lLocalMapPoints.end(); lit!=lend; lit++)
@@ -4680,6 +4682,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     bool bNonFixed = (lFixedKeyFrames.size() == 0);
 
     // Setup optimizer
+    // Step 3:设置优化器
     g2o::SparseOptimizer optimizer;
     g2o::BlockSolverX::LinearSolverType * linearSolver;
     linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>();
@@ -4701,6 +4704,8 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
 
 
     // Set Local temporal KeyFrame vertices
+    // Step 4:添加优化的顶点和边
+    // Step 4.1:添加惯性优化的顶点
     N=vpOptimizableKFs.size();
     for(int i=0; i<N; i++)
     {
@@ -4729,6 +4734,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     }
 
     // Set Local visual KeyFrame vertices
+    // Step 4.2:添加视觉优化的顶点
     for(list<KeyFrame*>::iterator it=lpOptVisKFs.begin(), itEnd = lpOptVisKFs.end(); it!=itEnd; it++)
     {
         KeyFrame* pKFi = *it;
@@ -4739,6 +4745,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     }
 
     // Set Fixed KeyFrame vertices
+    // Step 4.3:添加提供约束不优化的固定顶点
     for(list<KeyFrame*>::iterator lit=lFixedKeyFrames.begin(), lend=lFixedKeyFrames.end(); lit!=lend; lit++)
     {
         KeyFrame* pKFi = *lit;
@@ -4765,6 +4772,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     }
 
     // Create intertial constraints
+    // Step 4.4:添加惯性约束
     vector<EdgeInertial*> vei(N,(EdgeInertial*)NULL);
     vector<EdgeGyroRW*> vegr(N,(EdgeGyroRW*)NULL);
     vector<EdgeAccRW*> vear(N,(EdgeAccRW*)NULL);
@@ -4849,6 +4857,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     }
 
     // Set MapPoint vertices
+    // Step 4.5: 添加MapPoints顶点和约束
     const int nExpectedSize = (N+lFixedKeyFrames.size())*lLocalMapPoints.size();
 
     // Mono
@@ -5023,18 +5032,22 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
         assert(mit->second>=3);
     }
 
+    // Step 5: 进行优化
     optimizer.initializeOptimization();
     optimizer.computeActiveErrors();
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
     float err = optimizer.activeRobustChi2();
     optimizer.optimize(opt_it); // Originally to 2
     float err_end = optimizer.activeRobustChi2();
-    if(pbStopFlag)
+    // 外界设置的停止优化标志
+    // 可能在 Tracking::NeedNewKeyFrame() 里置位
+    if(pbStopFlag)   //? 是否用该放在优化之前
         optimizer.setForceStopFlag(pbStopFlag);
 
 
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
+    // Step 6: 清除外点
     vector<pair<KeyFrame*,MapPoint*> > vToErase;
     vToErase.reserve(vpEdgesMono.size()+vpEdgesStereo.size());
 
@@ -5109,6 +5122,7 @@ void Optimizer::LocalInertialBA(KeyFrame *pKF, bool *pbStopFlag, Map *pMap, bool
     for(list<KeyFrame*>::iterator lit=lFixedKeyFrames.begin(), lend=lFixedKeyFrames.end(); lit!=lend; lit++)
         (*lit)->mnBAFixedForKF = 0;
 
+    // Step 7: 更新优化后的变量
     // Recover optimized data
     // Local temporal Keyframes
     N=vpOptimizableKFs.size();
