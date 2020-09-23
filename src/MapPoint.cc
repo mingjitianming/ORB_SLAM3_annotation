@@ -592,6 +592,7 @@ Map* MapPoint::GetMap()
     return mpMap;
 }
 
+// 更新所属地图
 void MapPoint::UpdateMap(Map* pMap)
 {
     unique_lock<mutex> lock(mMutexMap);

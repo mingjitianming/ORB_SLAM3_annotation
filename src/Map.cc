@@ -162,6 +162,7 @@ long unsigned int Map::MapPointsInMap()
     return mspMapPoints.size();
 }
 
+// 获取Map中KeyFrames数量
 long unsigned int Map::KeyFramesInMap()
 {
     unique_lock<mutex> lock(mMutexMap);
@@ -421,6 +422,8 @@ void Map::PrintEssentialGraph()
     cout << "------------------" << endl << "End of the essential graph" << endl;
 }
 
+// 检测EssentialGraph是否合理
+//? 使用两级子帧包含当前地图所有帧来判断,是否存在问题
 bool Map::CheckEssentialGraph(){
     vector<KeyFrame*> vpOriginKFs = mvpKeyFrameOrigins;
     int count=0;

@@ -6950,6 +6950,7 @@ void Optimizer::MergeInertialBA(KeyFrame* pCurrKF, KeyFrame* pMergeKF, bool *pbS
     // Add sliding window for current KF
     vpOptimizableKFs.push_back(pCurrKF);
     pCurrKF->mnBALocalForKF = pCurrKF->mnId;
+    // 添加用于惯性约束的连续帧
     for(int i=1; i<Nd; i++)
     {
         if(vpOptimizableKFs.back()->mPrevKF)
@@ -6977,10 +6978,12 @@ void Optimizer::MergeInertialBA(KeyFrame* pCurrKF, KeyFrame* pMergeKF, bool *pbS
     cv::Mat Twc0 = pKF0->GetPoseInverse();
 
     // Add temporal neighbours to merge KF (previous and next KFs)
+    // 添加merge KF
     vpOptimizableKFs.push_back(pMergeKF);
     pMergeKF->mnBALocalForKF = pCurrKF->mnId;
 
     // Previous KFs
+    // 添加merge KF的连续帧
     for(int i=1; i<(Nd/2); i++)
     {
         if(vpOptimizableKFs.back()->mPrevKF)
@@ -6993,6 +6996,7 @@ void Optimizer::MergeInertialBA(KeyFrame* pCurrKF, KeyFrame* pMergeKF, bool *pbS
     }
 
     // We fix just once the old map
+    // // 设置固定帧
     if(vpOptimizableKFs.back()->mPrevKF)
     {
         lFixedKeyFrames.push_back(vpOptimizableKFs.back()->mPrevKF);
@@ -7027,6 +7031,7 @@ void Optimizer::MergeInertialBA(KeyFrame* pCurrKF, KeyFrame* pMergeKF, bool *pbS
     int N = vpOptimizableKFs.size();
 
     // Optimizable points seen by optimizable keyframes
+    // 收集优化关键帧的观测地图点
     list<MapPoint*> lLocalMapPoints;
     map<MapPoint*,int> mLocalObs;
     for(int i=0; i<N; i++)

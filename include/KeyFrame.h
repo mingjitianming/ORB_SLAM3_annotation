@@ -324,6 +324,7 @@ public:
     // Spanning tree functions
     void AddChild(KeyFrame* pKF);
     void EraseChild(KeyFrame* pKF);
+    // 更新父关键帧
     void ChangeParent(KeyFrame* pKF);
     std::set<KeyFrame*> GetChilds();
     KeyFrame* GetParent();
@@ -394,6 +395,7 @@ public:
     }
 
     Map* GetMap();
+    // 更新所属地图
     void UpdateMap(Map* pMap);
 
     void SetNewBias(const IMU::Bias &b);
@@ -581,7 +583,7 @@ protected:
     KeyFrame* mpParent;                 // 当前关键帧的父关键帧 （共视程度最高的）
     std::set<KeyFrame*> mspChildrens;   // 存储当前关键帧的子关键帧
     std::set<KeyFrame*> mspLoopEdges;   // 和当前关键帧形成回环关系的关键帧
-    std::set<KeyFrame*> mspMergeEdges;
+    std::set<KeyFrame*> mspMergeEdges;  // 和当前关键帧形成地图合并关系的关键帧
     // For save relation without pointer, this is necessary for save/load function
     long long int mBackupParentId;
     std::vector<long unsigned int> mvBackupChildrensId;

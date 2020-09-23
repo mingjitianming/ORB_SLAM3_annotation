@@ -379,6 +379,7 @@ void LocalMapping::ProcessNewKeyFrame()
     mpAtlas->AddKeyFrame(mpCurrentKeyFrame);
 }
 
+// 将待处理的关键帧处理完成
 void LocalMapping::EmptyQueue()
 {
     while(CheckNewKeyFrames())

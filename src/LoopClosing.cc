@@ -52,7 +52,10 @@ void LoopClosing::SetLocalMapper(LocalMapping *pLocalMapper)
     mpLocalMapper=pLocalMapper;
 }
 
-
+/*
+    world1 CurrentMap 坐标系
+    world2 合并坐标系
+ */
 void LoopClosing::Run()
 {
     mbFinished =false;
@@ -72,6 +75,8 @@ void LoopClosing::Run()
                 mpLastCurrentKF->mvpLoopCandKFs.clear();
                 mpLastCurrentKF->mvpMergeCandKFs.clear();
             }
+
+            // 检测闭环或地图合并
             if(NewDetectCommonRegions())
             {
                 if(mbMergeDetected)
@@ -86,12 +91,17 @@ void LoopClosing::Run()
                         Verbose::PrintMess("*Merged detected", Verbose::VERBOSITY_QUIET);
                         Verbose::PrintMess("Number of KFs in the current map: " + to_string(mpCurrentKF->GetMap()->KeyFramesInMap()), Verbose::VERBOSITY_DEBUG);
                         cv::Mat mTmw = mpMergeMatchedKF->GetPose();
+                        // world2 -> matched
                         g2o::Sim3 gSmw2(Converter::toMatrix3d(mTmw.rowRange(0, 3).colRange(0, 3)),Converter::toVector3d(mTmw.rowRange(0, 3).col(3)),1.0);
                         cv::Mat mTcw = mpCurrentKF->GetPose();
+                        // world1 -> current
                         g2o::Sim3 gScw1(Converter::toMatrix3d(mTcw.rowRange(0, 3).colRange(0, 3)),Converter::toVector3d(mTcw.rowRange(0, 3).col(3)),1.0);
+                        // current -> world2
                         g2o::Sim3 gSw2c = mg2oMergeSlw.inverse();
+                        // 没有使用,此处命名不合理
                         g2o::Sim3 gSw1m = mg2oMergeSlw;
 
+                        // 两地图相对位姿 world1 -> world2
                         mSold_new = (gSw2c * gScw1);
 
                         if(mpCurrentKF->GetMap()->IsInertial() && mpMergeMatchedKF->GetMap()->IsInertial())
@@ -107,7 +117,7 @@ void LoopClosing::Run()
                                 Verbose::PrintMess("scale bad estimated. Abort merging", Verbose::VERBOSITY_NORMAL);
                                 continue;
                             }
-                            // If inertial, force only yaw
+                            //XXX: If inertial, force only yaw
                             if ((mpTracker->mSensor==System::IMU_MONOCULAR ||mpTracker->mSensor==System::IMU_STEREO) &&
                                    mpCurrentKF->GetMap()->GetIniertialBA1()) // TODO, maybe with GetIniertialBA1
                             {
@@ -124,8 +134,10 @@ void LoopClosing::Run()
 //                        cout << "Angle Rw2w1: " << 180*LogSO3(mSold_new.rotation().toRotationMatrix())/3.14 << endl;
 //                        cout << "scale w2w1: " << mSold_new.scale() << endl;
 
+                        // matched -> world1
                         mg2oMergeSmw = gSmw2 * gSw2c * gScw1;
 
+                        // world2 ->current
                         mg2oMergeScw = mg2oMergeSlw;
 
                         // TODO UNCOMMENT
@@ -157,6 +169,7 @@ void LoopClosing::Run()
                         mvpLoopMatchedMPs.clear();
                         mvpLoopMPs.clear();
                         mnLoopNumNotFound = 0;
+                        // 这里优化后跳过下面的闭环优化
                         mbLoopDetected = false;
                     }
 
@@ -314,6 +327,7 @@ bool LoopClosing::NewDetectCommonRegions()
         g2o::Sim3 gScw = gScl * mg2oLoopSlw;
         int numProjMatches = 0;
         vector<MapPoint*> vpMatchedMPs;
+        // 从上一闭环匹配帧探测共同MapPoints并修正位姿
         bool bCommonRegion = DetectAndReffineSim3FromLastKF(mpCurrentKF, mpLoopMatchedKF, gScw, numProjMatches, mvpLoopMPs, vpMatchedMPs);
         if(bCommonRegion)
         {
@@ -511,13 +525,14 @@ bool LoopClosing::NewDetectCommonRegions()
 bool LoopClosing::DetectAndReffineSim3FromLastKF(KeyFrame* pCurrentKF, KeyFrame* pMatchedKF, g2o::Sim3 &gScw, int &nNumProjMatches,
                                                  std::vector<MapPoint*> &vpMPs, std::vector<MapPoint*> &vpMatchedMPs)
 {
+    // 计算重投影匹配MapPoints
     set<MapPoint*> spAlreadyMatchedMPs;
     nNumProjMatches = FindMatchesByProjection(pCurrentKF, pMatchedKF, gScw, spAlreadyMatchedMPs, vpMPs, vpMatchedMPs);
     cout << "REFFINE-SIM3: Projection from last KF with " << nNumProjMatches << " matches" << endl;
 
 
-    int nProjMatches = 30;
-    int nProjOptMatches = 50;
+    int nProjMatches = 30;      // 重投影匹配数量阀值
+    int nProjOptMatches = 50;   // 优化后匹配阀值
     int nProjMatchesRep = 100;
 
     /*if(mpTracker->mSensor==System::IMU_MONOCULAR ||mpTracker->mSensor==System::IMU_STEREO)
@@ -527,8 +542,10 @@ bool LoopClosing::DetectAndReffineSim3FromLastKF(KeyFrame* pCurrentKF, KeyFrame*
         nProjMatchesRep = 80;
     }*/
 
+
     if(nNumProjMatches >= nProjMatches)
     {
+        // 优化修正CKF的位姿
         cv::Mat mScw = Converter::toCvMat(gScw);
         cv::Mat mTwm = pMatchedKF->GetPoseInverse();
         g2o::Sim3 gSwm(Converter::toMatrix3d(mTwm.rowRange(0, 3).colRange(0, 3)),Converter::toVector3d(mTwm.rowRange(0, 3).col(3)),1.0);
@@ -542,7 +559,7 @@ bool LoopClosing::DetectAndReffineSim3FromLastKF(KeyFrame* pCurrentKF, KeyFrame*
         cout << "REFFINE-SIM3: Optimize Sim3 from last KF with " << numOptMatches << " inliers" << endl;
 
 
-
+        // 如果满足阀值,进行重投影匹配验证
         if(numOptMatches > nProjOptMatches)
         {
             g2o::Sim3 gScw_estimation(Converter::toMatrix3d(mScw.rowRange(0, 3).colRange(0, 3)),
@@ -1008,6 +1025,7 @@ int LoopClosing::FindMatchesByProjection(KeyFrame* pCurrentKF, KeyFrame* pMatche
                                          set<MapPoint*> &spMatchedMPinOrigin, vector<MapPoint*> &vpMapPoints,
                                          vector<MapPoint*> &vpMatchedMapPoints)
 {
+    // 获取匹配帧的前5个共视帧
     int nNumCovisibles = 5;
     vector<KeyFrame*> vpCovKFm = pMatchedKFw->GetBestCovisibilityKeyFrames(nNumCovisibles);
     int nInitialCov = vpCovKFm.size();
@@ -1016,6 +1034,7 @@ int LoopClosing::FindMatchesByProjection(KeyFrame* pCurrentKF, KeyFrame* pMatche
     set<KeyFrame*> spCurrentCovisbles = pCurrentKF->GetConnectedKeyFrames();
     for(int i=0; i<nInitialCov; ++i)
     {
+        //获得不在匹配帧一级共视帧和CKF一级共视帧中的匹配帧的二级共视帧
         vector<KeyFrame*> vpKFs = vpCovKFm[i]->GetBestCovisibilityKeyFrames(nNumCovisibles);
         int nInserted = 0;
         int j = 0;
@@ -1028,8 +1047,10 @@ int LoopClosing::FindMatchesByProjection(KeyFrame* pCurrentKF, KeyFrame* pMatche
             }
             ++j;
         }
+        //? 此处是否应该使用spCheckKFS
         vpCovKFm.insert(vpCovKFm.end(), vpKFs.begin(), vpKFs.end());
     }
+    // 获得共视帧的地图点
     set<MapPoint*> spMapPoints;
     vpMapPoints.clear();
     vpMatchedMapPoints.clear();
@@ -1298,6 +1319,7 @@ void LoopClosing::CorrectLoop()
     mLastLoopKFid = mpCurrentKF->mnId; //TODO old varible, it is not use in the new algorithm
 }
 
+// 不使用imu时的地图融合
 void LoopClosing::MergeLocal()
 {
     Verbose::PrintMess("MERGE-VISUAL: Merge Visual detected!!!!", Verbose::VERBOSITY_NORMAL);
@@ -1317,6 +1339,7 @@ void LoopClosing::MergeLocal()
 
     Verbose::PrintMess("MERGE-VISUAL: Check Full Bundle Adjustment", Verbose::VERBOSITY_DEBUG);
     // If a Global Bundle Adjustment is running, abort it
+    // Step 1:如果正在进行全局BA,则舍弃运行GBA的线程
     if(isRunningGBA())
     {
         unique_lock<mutex> lock(mMutexGBA);
@@ -1333,6 +1356,7 @@ void LoopClosing::MergeLocal()
     }
 
     Verbose::PrintMess("MERGE-VISUAL: Request Stop Local Mapping", Verbose::VERBOSITY_DEBUG);
+    // 对地图进行操作需要停止Local Mapping
     mpLocalMapper->RequestStop();
     // Wait until Local Mapping has effectively stopped
     while(!mpLocalMapper->isStopped())
@@ -1345,6 +1369,7 @@ void LoopClosing::MergeLocal()
 
     // Merge map will become in the new active map with the local window of KFs and MPs from the current map.
     // Later, the elements of the current map will be transform to the new active map reference, in order to keep real time tracking
+    // 获得待合并的两个地图
     Map* pCurrentMap = mpCurrentKF->GetMap();
     Map* pMergeMap = mpMergeMatchedKF->GetMap();
 
@@ -2013,6 +2038,7 @@ void LoopClosing::MergeLocal2()
 
     cout << "Check Full Bundle Adjustment" << endl;
     // If a Global Bundle Adjustment is running, abort it
+    // Step 1:如果正在进行全局BA,则舍弃运行GBA的线程
     if(isRunningGBA())
     {
         unique_lock<mutex> lock(mMutexGBA);
@@ -2030,6 +2056,7 @@ void LoopClosing::MergeLocal2()
 
 
     cout << "Request Stop Local Mapping" << endl;
+    // 对地图进行操作需要停止Local Mapping
     mpLocalMapper->RequestStop();
     // Wait until Local Mapping has effectively stopped
     while(!mpLocalMapper->isStopped())
@@ -2038,9 +2065,11 @@ void LoopClosing::MergeLocal2()
     }
     cout << "Local Map stopped" << endl;
 
+    // 获得待合并的两个地图
     Map* pCurrentMap = mpCurrentKF->GetMap();
     Map* pMergeMap = mpMergeMatchedKF->GetMap();
 
+    // Step 2:将CurrentMap的KF和MapPoints的pose变换到world2
     {
         float s_on = mSold_new.scale();
         cv::Mat R_on = Converter::toCvMat(mSold_new.rotation().toRotationMatrix());
@@ -2048,6 +2077,7 @@ void LoopClosing::MergeLocal2()
 
         unique_lock<mutex> lock(mpAtlas->GetCurrentMap()->mMutexMapUpdate);
 
+        // 将LocalMapping中待处理的关键帧处理完成
         cout << "KFs before empty: " << mpAtlas->GetCurrentMap()->KeyFramesInMap() << endl;
         mpLocalMapper->EmptyQueue();
         cout << "KFs after empty: " << mpAtlas->GetCurrentMap()->KeyFramesInMap() << endl;
@@ -2059,14 +2089,16 @@ void LoopClosing::MergeLocal2()
         bool bScaleVel=false;
         if(s_on!=1)
             bScaleVel=true;
+        // 更新KF,MapPoints的pose到world2
         mpAtlas->GetCurrentMap()->ApplyScaledRotation(R_on,s_on,bScaleVel,t_on);
         mpTracker->UpdateFrameIMU(s_on,mpCurrentKF->GetImuBias(),mpTracker->GetLastKeyFrame());
 
         std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
     }
 
-    const int numKFnew=pCurrentMap->KeyFramesInMap();
+    const int numKFnew=pCurrentMap->KeyFramesInMap();   // 当前Map KF数量
 
+    // Step 3:如果IMU没有完全初始化,则对其进行初始化
     if((mpTracker->mSensor==System::IMU_MONOCULAR || mpTracker->mSensor==System::IMU_STEREO)&& !pCurrentMap->GetIniertialBA2()){
         // Map is not completly initialized
         Eigen::Vector3d bg, ba;
@@ -2089,16 +2121,18 @@ void LoopClosing::MergeLocal2()
 
     // Load KFs and MPs from merge map
     cout << "updating current map" << endl;
+    // Step 4:将待合并地图中的关键帧和MapPoints移入到当前地图,并从原地图中移除(pose已经在上面更新了)
     {
         // Get Merge Map Mutex (This section stops tracking!!)
         unique_lock<mutex> currentLock(pCurrentMap->mMutexMapUpdate); // We update the current map with the Merge information
         unique_lock<mutex> mergeLock(pMergeMap->mMutexMapUpdate); // We remove the Kfs and MPs in the merged area from the old map
 
-
+        // 合并地图的KFs和MPs
         vector<KeyFrame*> vpMergeMapKFs = pMergeMap->GetAllKeyFrames();
         vector<MapPoint*> vpMergeMapMPs = pMergeMap->GetAllMapPoints();
 
 
+        // 更新待合并地图的所有关键帧,将其加入当前地图,并从源地图中移除
         for(KeyFrame* pKFi : vpMergeMapKFs)
         {
             if(!pKFi || pKFi->isBad() || pKFi->GetMap() != pMergeMap)
@@ -2112,6 +2146,7 @@ void LoopClosing::MergeLocal2()
             pMergeMap->EraseKeyFrame(pKFi);
         }
 
+        // 更新合并地图的所有MapPoints,将其加入当前地图,并从源地图中移除
         for(MapPoint* pMPi : vpMergeMapMPs)
         {
             if(!pMPi || pMPi->isBad() || pMPi->GetMap() != pMergeMap)
@@ -2139,16 +2174,19 @@ void LoopClosing::MergeLocal2()
     cout << "end updating current map" << endl;
 
     // Critical zone
+    // 只用来记录log
     bool good = pCurrentMap->CheckEssentialGraph();
     /*if(!good)
         cout << "BAD ESSENTIAL GRAPH!!" << endl;*/
 
     cout << "Update essential graph" << endl;
     // mpCurrentKF->UpdateConnections(); // to put at false mbFirstConnection
+    // Step 5: 更新CurrentMap本质矩阵
     pMergeMap->GetOriginKF()->SetFirstConnection(false);
     pNewChild = mpMergeMatchedKF->GetParent(); // Old parent, it will be the new child of this KF
     pNewParent = mpMergeMatchedKF; // Old child, now it will be the parent of its own parent(we need eliminate this KF from children list in its old parent)
     mpMergeMatchedKF->ChangeParent(mpCurrentKF);
+    // 将父子关系倒转
     while(pNewChild)
     {
         pNewChild->EraseChild(pNewParent); // We remove the relation between the old parent and the new for avoid loop
@@ -2168,12 +2206,13 @@ void LoopClosing::MergeLocal2()
     if(!good)
         cout << "BAD ESSENTIAL GRAPH 1!!" << endl;
 
+    // Step 6: 融合地图
     cout << "Update relationship between KFs" << endl;
+    // Step 6.1: 构建Welding window帧间连接(从mergeMap和CurrentMap选取个选6个关键帧,MapPoints用于融合地图)
     vector<MapPoint*> vpCheckFuseMapPoint; // MapPoint vector from current map to allow to fuse duplicated points with the old map (merge)
     vector<KeyFrame*> vpCurrentConnectedKFs;
 
-
-
+    // Step 6.1.1:获取匹配帧及其共视帧
     mvpMergeConnectedKFs.push_back(mpMergeMatchedKF);
     vector<KeyFrame*> aux = mpMergeMatchedKF->GetVectorCovisibleKeyFrames();
     mvpMergeConnectedKFs.insert(mvpMergeConnectedKFs.end(), aux.begin(), aux.end());
@@ -2182,6 +2221,7 @@ void LoopClosing::MergeLocal2()
     /*mvpMergeConnectedKFs = mpMergeMatchedKF->GetVectorCovisibleKeyFrames();
     mvpMergeConnectedKFs.push_back(mpMergeMatchedKF);*/
 
+    // Step 6.1.2:获取当前帧及其共视帧
     mpCurrentKF->UpdateConnections();
     vpCurrentConnectedKFs.push_back(mpCurrentKF);
     /*vpCurrentConnectedKFs = mpCurrentKF->GetVectorCovisibleKeyFrames();
@@ -2191,6 +2231,7 @@ void LoopClosing::MergeLocal2()
     if (vpCurrentConnectedKFs.size()>6)
         vpCurrentConnectedKFs.erase(vpCurrentConnectedKFs.begin()+6,vpCurrentConnectedKFs.end());
 
+    // Step 6.1.3:获取匹配帧及其共视帧观测的MapPoints
     set<MapPoint*> spMapPointMerge;
     for(KeyFrame* pKFi : mvpMergeConnectedKFs)
     {
@@ -2215,6 +2256,8 @@ void LoopClosing::MergeLocal2()
     if(!good)
         cout << "BAD ESSENTIAL GRAPH 2!!" << endl;
 
+    // Step 6.2: 合并地图
+    // Step 6.2.1: 移除、合并冗余地图点
     cout << "start SearchAndFuse" << endl;
     SearchAndFuse(vpCurrentConnectedKFs, vpCheckFuseMapPoint);
     cout << "end SearchAndFuse" << endl;
@@ -2228,6 +2271,7 @@ void LoopClosing::MergeLocal2()
     cout << "Init to update connections" << endl;
 
 
+    // Step 6.2.2: 更新共视图连接
     for(KeyFrame* pKFi : vpCurrentConnectedKFs)
     {
         if(!pKFi || pKFi->isBad())
@@ -2261,6 +2305,7 @@ void LoopClosing::MergeLocal2()
         cout << "BAD ESSENTIAL GRAPH 5!!" << endl;
 
     // Perform BA
+    // Step 7: 融合窗口BA优化
     bool bStopFlag=false;
     KeyFrame* pCurrKF = mpTracker->GetLastKeyFrame();
     cout << "start MergeInertialBA" << endl;
@@ -2274,6 +2319,7 @@ void LoopClosing::MergeLocal2()
     // Release Local Mapping.
     mpLocalMapper->Release();
 
+    //?? Atlas中的旧地图还没有移除
 
     return;
 }
@@ -2370,33 +2416,49 @@ void LoopClosing::SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap, vector
 }
 
 
+/**
+ * @brief 将闭环相连关键帧组mvpLoopMapPoints 投影到当前关键帧组中，进行匹配，新增或替换当前关键帧组中KF的地图点
+ * 因为 闭环相连关键帧组mvpLoopMapPoints 在地图中时间比较久经历了多次优化，认为是准确的
+ * 而当前关键帧组中的关键帧的地图点是最近新计算的，可能有累积误差
+ */
 void LoopClosing::SearchAndFuse(const vector<KeyFrame*> &vConectedKFs, vector<MapPoint*> &vpMapPoints)
 {
+    // 定义ORB匹配器
     ORBmatcher matcher(0.8);
 
     int total_replaces = 0;
 
     cout << "FUSE-POSE: Initially there are " << vpMapPoints.size() << " MPs" << endl;
     cout << "FUSE-POSE: Intially there are " << vConectedKFs.size() << " KFs" << endl;
+    // Step 1 遍历待矫正的当前KF的相连关键帧
     for(auto mit=vConectedKFs.begin(), mend=vConectedKFs.end(); mit!=mend;mit++)
     {
         int num_replaces = 0;
         KeyFrame* pKF = (*mit);
         Map* pMap = pKF->GetMap();
+        // 矫正过的Sim 变换
         cv::Mat cvScw = pKF->GetPose();
 
+        // Step 2 将vpMapPoints投影到pKF帧匹配，检查地图点冲突并融合
+        // vpMapPoints：地图融合时与当前关键帧闭环匹配上的关键帧及其共视关键帧组成的地图点
         vector<MapPoint*> vpReplacePoints(vpMapPoints.size(),static_cast<MapPoint*>(NULL));
+        // vpReplacePoints：存储mvpLoopMapPoints投影到pKF匹配后需要替换掉的新增地图点,索引和mvpLoopMapPoints一致
+        // 搜索区域系数为4
         matcher.Fuse(pKF,cvScw,vpMapPoints,4,vpReplacePoints);
 
         // Get Map Mutex
+        // 之所以不在上面 Fuse 函数中进行地图点融合更新的原因是需要对地图加锁
         unique_lock<mutex> lock(pMap->mMutexMapUpdate);
         const int nLP = vpMapPoints.size();
+        // Step 3 遍历闭环帧组的所有的地图点，替换掉需要替换的地图点
         for(int i=0; i<nLP;i++)
         {
             MapPoint* pRep = vpReplacePoints[i];
             if(pRep)
             {
                 num_replaces += 1;
+                // 如果记录了需要替换的地图点
+                // 用vpMapPoints替换掉vpReplacePoints里记录的要替换的地图点
                 pRep->Replace(vpMapPoints[i]);
             }
         }

@@ -568,6 +568,7 @@ void KeyFrame::EraseChild(KeyFrame *pKF)
     mspChildrens.erase(pKF);
 }
 
+// 更新父关键帧
 void KeyFrame::ChangeParent(KeyFrame *pKF)
 {
     unique_lock<mutex> lockCon(mMutexConnections);
@@ -946,6 +947,7 @@ Map* KeyFrame::GetMap()
     return mpMap;
 }
 
+// 更新所属地图
 void KeyFrame::UpdateMap(Map* pMap)
 {
     unique_lock<mutex> lock(mMutexMap);

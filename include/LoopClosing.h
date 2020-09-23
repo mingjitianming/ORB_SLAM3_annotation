@@ -104,7 +104,16 @@ protected:
                                 vector<MapPoint*> &vpMatchedMapPoints);
 
 
+    /**
+     * @brief 通过将闭环时相连关键帧的MapPoints投影到这些关键帧中，进行MapPoints检查与替换
+     * @param[in] CorrectedPosesMap 关联的当前帧组中的关键帧和相应的纠正后的位姿
+     */
     void SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap, vector<MapPoint*> &vpMapPoints);
+    /**
+     * @brief 通过将地图融合时相连关键帧的MapPoints投影到这些关键帧中，进行MapPoints检查与替换
+     * @param[in] vConectedKFs 关联的当前帧组中的关键帧
+     * @param[in] vpMapPoints  关联的当匹配组中的关键帧观测地图点
+     */
     void SearchAndFuse(const vector<KeyFrame*> &vConectedKFs, vector<MapPoint*> &vpMapPoints);
 
     void CorrectLoop();
@@ -163,11 +172,11 @@ protected:
     //-------
     Map* mpLastMap;         /// 最新的map
 
-    bool mbLoopDetected;
+    bool mbLoopDetected;        // 是否检测到闭环
     int mnLoopNumCoincidences;  // 对候选组位姿优化后，候选组匹配出的MapPoints对CKF的共视帧同样有效的共视帧数目
-    int mnLoopNumNotFound;
-    KeyFrame* mpLoopLastCurrentKF;
-    g2o::Sim3 mg2oLoopSlw;
+    int mnLoopNumNotFound;      // 在找到闭环候选帧后连续匹配闭环不成功的次数
+    KeyFrame* mpLoopLastCurrentKF;   /// 上一个检测闭环的关键帧
+    g2o::Sim3 mg2oLoopSlw;           // last KF 在检测到闭环时在闭环世界坐标系的位姿 world -> lastKF
     g2o::Sim3 mg2oLoopScw;
     /// 最终检测出来的,和当前关键帧形成闭环的闭环关键帧
     KeyFrame* mpLoopMatchedKF;
@@ -175,13 +184,16 @@ protected:
     std::vector<MapPoint*> mvpLoopMPs;
     /// 在闭环帧及其共视帧中的重投影匹配的闭环MapPoints
     std::vector<MapPoint*> mvpLoopMatchedMPs;
+    /// 是否检测到合并闭环
     bool mbMergeDetected;
-    // 对候选组位姿优化后，候选组匹配出的MapPoints对CKF的共视帧同样有效的共视帧数目
+    /// 对候选组位姿优化后，候选组匹配出的MapPoints对CKF的共视帧同样有效的共视帧数目
     int mnMergeNumCoincidences;
-    int mnMergeNumNotFound;
-    KeyFrame* mpMergeLastCurrentKF;
+    int mnMergeNumNotFound;             // 在找到闭环候选帧后连续匹配闭环不成功的次数
+    KeyFrame* mpMergeLastCurrentKF;     /// 上一个检测合并闭环的关键帧
+    // 在NewDetectCommonRegions()中为last KF 在检测到闭环地图合并时在合并地图世界坐标系的位姿 world2 -> lastKF
+    // 在Run中为CKF world2 -> CKF
     g2o::Sim3 mg2oMergeSlw;
-    g2o::Sim3 mg2oMergeSmw;
+    g2o::Sim3 mg2oMergeSmw;             // 用于合并的闭环匹配帧的世界位姿   world -> matched
     g2o::Sim3 mg2oMergeScw;
     /// 最终检测出来的,和当前关键帧形成闭环的地图合并关键帧
     KeyFrame* mpMergeMatchedKF;
@@ -191,7 +203,7 @@ protected:
     std::vector<MapPoint*> mvpMergeMatchedMPs;
     std::vector<KeyFrame*> mvpMergeConnectedKFs;
 
-    g2o::Sim3 mSold_new;
+    g2o::Sim3 mSold_new;       /// 两地图相对位姿 world1 -> world2
     //-------
 
     long unsigned int mLastLoopKFid;
@@ -213,7 +225,7 @@ protected:
 
     vector<double> vdPR_CurrentTime;
     vector<double> vdPR_MatchedTime;
-    vector<int> vnPR_TypeRecogn;
+    vector<int> vnPR_TypeRecogn;  //0:闭环  1:地图融合
 };
 
 } //namespace ORB_SLAM

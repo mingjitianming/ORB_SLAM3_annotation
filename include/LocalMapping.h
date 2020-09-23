@@ -51,6 +51,7 @@ public:
     void Run();
 
     void InsertKeyFrame(KeyFrame* pKF);
+    // 将待处理的关键帧处理完成
     void EmptyQueue();
 
     // Thread Synch
