@@ -472,7 +472,7 @@ public:
     long unsigned int mnBAGlobalForKF; // 记录是由于哪个"当前关键帧"触发的全局BA,用来防止重复写入的事情发生(浪费时间)
 
     // Variables used by merging
-    cv::Mat mTcwMerge;
+    cv::Mat mTcwMerge;     // 地图合并矫正后的pose world2 ->current 在LoopClosing::MergeLocal()中使用
     cv::Mat mTcwBefMerge;
     cv::Mat mTwcBefMerge;
     cv::Mat mVwbMerge;

@@ -193,8 +193,8 @@ protected:
     // 在NewDetectCommonRegions()中为last KF 在检测到闭环地图合并时在合并地图世界坐标系的位姿 world2 -> lastKF
     // 在Run中为CKF world2 -> CKF
     g2o::Sim3 mg2oMergeSlw;
-    g2o::Sim3 mg2oMergeSmw;             // 用于合并的闭环匹配帧的世界位姿   world -> matched
-    g2o::Sim3 mg2oMergeScw;
+    g2o::Sim3 mg2oMergeSmw;             // 用于合并的闭环匹配帧的世界位姿   world1 -> matched
+    g2o::Sim3 mg2oMergeScw;             // world2 ->current
     /// 最终检测出来的,和当前关键帧形成闭环的地图合并关键帧
     KeyFrame* mpMergeMatchedKF;
     /// 在合并帧及其共视帧中的合并MapPoints

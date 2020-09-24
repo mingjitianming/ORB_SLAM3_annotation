@@ -134,7 +134,7 @@ void LoopClosing::Run()
 //                        cout << "Angle Rw2w1: " << 180*LogSO3(mSold_new.rotation().toRotationMatrix())/3.14 << endl;
 //                        cout << "scale w2w1: " << mSold_new.scale() << endl;
 
-                        // matched -> world1
+                        // world1 -> matched 
                         mg2oMergeSmw = gSmw2 * gSw2c * gScw1;
 
                         // world2 ->current
@@ -1365,6 +1365,7 @@ void LoopClosing::MergeLocal()
     }
     Verbose::PrintMess("MERGE-VISUAL: Local Map stopped", Verbose::VERBOSITY_DEBUG);
 
+    // 将LocalMapping中待处理的关键帧处理完成
     mpLocalMapper->EmptyQueue();
 
     // Merge map will become in the new active map with the local window of KFs and MPs from the current map.
@@ -1382,10 +1383,13 @@ void LoopClosing::MergeLocal()
     // Ensure current keyframe is updated
     mpCurrentKF->UpdateConnections();
 
+    // Step 2: 构造地图融合窗口
     //Get the current KF and its neighbors(visual->covisibles; inertial->temporal+covisibles)
     set<KeyFrame*> spLocalWindowKFs;
     //Get MPs in the welding area from the current map
     set<MapPoint*> spLocalWindowMPs;
+    // Step 2.1: 获取CurrentKF相邻帧及其观测MapPoints
+    //? 不应该会有imu
     if(pCurrentMap->IsInertial() && pMergeMap->IsInertial()) //TODO Check the correct initialization
     {
         KeyFrame* pKFi = mpCurrentKF;
@@ -1401,7 +1405,8 @@ void LoopClosing::MergeLocal()
         }
 
         pKFi = mpCurrentKF->mNextKF;
-        while(pKFi)
+        //?? 死循环
+        while(pKFi) 
         {
             spLocalWindowKFs.insert(pKFi);
 
@@ -1414,11 +1419,13 @@ void LoopClosing::MergeLocal()
         spLocalWindowKFs.insert(mpCurrentKF);
     }
 
+    // Step 2.1.1:添加共视帧
     vector<KeyFrame*> vpCovisibleKFs = mpCurrentKF->GetBestCovisibilityKeyFrames(numTemporalKFs);
     spLocalWindowKFs.insert(vpCovisibleKFs.begin(), vpCovisibleKFs.end());
     Verbose::PrintMess("MERGE-VISUAL: Initial number of KFs in local window from active map: " + to_string(spLocalWindowKFs.size()), Verbose::VERBOSITY_DEBUG);
     const int nMaxTries = 3;
     int nNumTries = 0;
+    // Step 2.1.2:添加二级共视帧
     while(spLocalWindowKFs.size() < numTemporalKFs && nNumTries < nMaxTries)
     {
         vector<KeyFrame*> vpNewCovKFs;
@@ -1445,6 +1452,7 @@ void LoopClosing::MergeLocal()
     //vector<KeyFrame*> vpTestKFs = pCurrentMap->GetAllKeyFrames();
     //spLocalWindowKFs.insert(vpTestKFs.begin(), vpTestKFs.end());
 
+    // Step 2.1.3:获取窗口中关键帧观测到的MapPoints
     for(KeyFrame* pKFi : spLocalWindowKFs)
     {
         if(!pKFi || pKFi->isBad())
@@ -1457,7 +1465,11 @@ void LoopClosing::MergeLocal()
     Verbose::PrintMess("MERGE-VISUAL: Number of MPs in the active map: " + to_string(pCurrentMap->GetAllMapPoints().size()), Verbose::VERBOSITY_DEBUG);
 
     Verbose::PrintMess("-------", Verbose::VERBOSITY_DEBUG);
+
+    // Step 2.2: 获取匹配帧相邻帧及其观测MapPoints
     set<KeyFrame*> spMergeConnectedKFs;
+
+    // 不应该有IMU
     if(pCurrentMap->IsInertial() && pMergeMap->IsInertial()) //TODO Check the correct initialization
     {
         KeyFrame* pKFi = mpMergeMatchedKF;
@@ -1479,10 +1491,13 @@ void LoopClosing::MergeLocal()
     {
         spMergeConnectedKFs.insert(mpMergeMatchedKF);
     }
+
+    // Step 2.2.1: 获得匹配帧及其共视帧
     vpCovisibleKFs = mpMergeMatchedKF->GetBestCovisibilityKeyFrames(numTemporalKFs);
     spMergeConnectedKFs.insert(vpCovisibleKFs.begin(), vpCovisibleKFs.end());
     Verbose::PrintMess("MERGE-VISUAL: Initial number of KFs in the local window from matched map: " + to_string(spMergeConnectedKFs.size()), Verbose::VERBOSITY_DEBUG);
     nNumTries = 0;
+    // Step 2.2.2: 添加匹配帧的二级共视帧
     while(spMergeConnectedKFs.size() < numTemporalKFs && nNumTries < nMaxTries)
     {
         vector<KeyFrame*> vpNewCovKFs;
@@ -1504,6 +1519,7 @@ void LoopClosing::MergeLocal()
     }
     Verbose::PrintMess("MERGE-VISUAL: Last number of KFs in the localwindow from matched map: " + to_string(spMergeConnectedKFs.size()), Verbose::VERBOSITY_DEBUG);
 
+    // Step 2.2.3:获取匹配帧方面的MapPoints
     set<MapPoint*> spMapPointMerge;
     for(KeyFrame* pKFi : spMergeConnectedKFs)
     {
@@ -1515,13 +1531,16 @@ void LoopClosing::MergeLocal()
     vpCheckFuseMapPoint.reserve(spMapPointMerge.size());
     std::copy(spMapPointMerge.begin(), spMapPointMerge.end(), std::back_inserter(vpCheckFuseMapPoint));
 
-    //
+    // Step 2.3: 更新窗口内容位姿
+    // Step 2.3.1: 计算CKF在world1，world2中的位姿
     cv::Mat Twc = mpCurrentKF->GetPoseInverse();
 
     cv::Mat Rwc = Twc.rowRange(0,3).colRange(0,3);
     cv::Mat twc = Twc.rowRange(0,3).col(3);
     g2o::Sim3 g2oNonCorrectedSwc(Converter::toMatrix3d(Rwc),Converter::toVector3d(twc),1.0);
+    // world1 -> current
     g2o::Sim3 g2oNonCorrectedScw = g2oNonCorrectedSwc.inverse();
+    // world2 -> current
     g2o::Sim3 g2oCorrectedScw = mg2oMergeScw; //TODO Check the transformation
 
     KeyFrameAndPose vCorrectedSim3, vNonCorrectedSim3;
@@ -1535,6 +1554,7 @@ void LoopClosing::MergeLocal()
 #else
     std::chrono::monotonic_clock::time_point timeStartTransfMerge = std::chrono::monotonic_clock::now();
 #endif
+    // Step 2.3.2: 对窗口中的位姿进行更正
     for(KeyFrame* pKFi : spLocalWindowKFs)
     {
         if(!pKFi || pKFi->isBad())
@@ -1571,6 +1591,7 @@ void LoopClosing::MergeLocal()
         pKFi->mTcwMerge  = pKFi->GetPose();
 
         // Update keyframe pose with corrected Sim3. First transform Sim3 to SE3 (scale translation)
+        // 更新尺度位姿
         Eigen::Matrix3d eigR = g2oCorrectedSiw.rotation().toRotationMatrix();
         Eigen::Vector3d eigt = g2oCorrectedSiw.translation();
         double s = g2oCorrectedSiw.scale();
@@ -1606,6 +1627,7 @@ void LoopClosing::MergeLocal()
         //pKFi->mnOriginMapId = 5;
     }
 
+    // Step 2.3.3:更新地图点位姿
     for(MapPoint* pMPi : spLocalWindowMPs)
     {
         if(!pMPi || pMPi->isBad())
@@ -1649,10 +1671,13 @@ void LoopClosing::MergeLocal()
 #else
     std::chrono::monotonic_clock::time_point timeStartCritMerge = std::chrono::monotonic_clock::now();
 #endif
+    
+    // Step 2.3.4:更新KF、MPs与地图的归属关系并切换地图
     {
         unique_lock<mutex> currentLock(pCurrentMap->mMutexMapUpdate); // We update the current map with the Merge information
         unique_lock<mutex> mergeLock(pMergeMap->mMutexMapUpdate); // We remove the Kfs and MPs in the merged area from the old map
 
+        // 将KF转到MergeMap并从CurrentMap移除
         for(KeyFrame* pKFi : spLocalWindowKFs)
         {
             if(!pKFi || pKFi->isBad())
@@ -1677,6 +1702,8 @@ void LoopClosing::MergeLocal()
             }
         }
 
+
+        // 将MapPoint转到MergeMap并从CurrentMap移除
         for(MapPoint* pMPi : spLocalWindowMPs)
         {
             if(!pMPi || pMPi->isBad())
@@ -1708,6 +1735,7 @@ void LoopClosing::MergeLocal()
     Verbose::PrintMess("MERGE-VISUAL: LOCAL MAPPING number of KFs: " + to_string(mpLocalMapper->KeyframesInQueue()), Verbose::VERBOSITY_DEBUG);
 
     //Rebuild the essential graph in the local window
+    // Step 3:在窗口中构建essential graph
     pCurrentMap->GetOriginKF()->SetFirstConnection(false);
     pNewChild = mpCurrentKF->GetParent(); // Old parent, it will be the new child of this KF
     pNewParent = mpCurrentKF; // Old child, now it will be the parent of its own parent(we need eliminate this KF from children list in its old parent)
@@ -1726,6 +1754,7 @@ void LoopClosing::MergeLocal()
     }
 
     //Update the connections between the local window
+    // 更新匹配帧的连接
     mpMergeMatchedKF->UpdateConnections();
     //cout << "MERGE-VISUAL: Essential graph rebuilded" << endl;
 
@@ -1747,6 +1776,8 @@ void LoopClosing::MergeLocal()
     // Project MapPoints observed in the neighborhood of the merge keyframe
     // into the current keyframe and neighbors using corrected poses.
     // Fuse duplications.
+    // Step 4
+    // Step 4.1:移除、合并冗余地图点
     SearchAndFuse(vCorrectedSim3, vpCheckFuseMapPoint);
 
 #ifdef COMPILEDWITHC11
@@ -1758,6 +1789,7 @@ void LoopClosing::MergeLocal()
     Verbose::PrintMess("MERGE-VISUAL: FUSE DUPLICATED ms: " + to_string(timeFuseMerge.count()), Verbose::VERBOSITY_DEBUG);
 
     // Update connectivity
+    // Step 4.2:更新共视图连接
     Verbose::PrintMess("MERGE-VISUAL: Init to update connections in the welding area", Verbose::VERBOSITY_DEBUG);
     for(KeyFrame* pKFi : spLocalWindowKFs)
     {
@@ -1778,6 +1810,7 @@ void LoopClosing::MergeLocal()
 
     Verbose::PrintMess("MERGE-VISUAL: Finish to update connections in the welding area", Verbose::VERBOSITY_DEBUG);
 
+    // Step 5:融合窗口BA优化
     bool bStop = false;
     Verbose::PrintMess("MERGE-VISUAL: Start local BA ", Verbose::VERBOSITY_DEBUG);
     vpLocalCurrentWindowKFs.clear();
@@ -1806,6 +1839,7 @@ void LoopClosing::MergeLocal()
 
     ////
     //Update the non critical area from the current map to the merged map
+    // Step 6: 更新非融合区域
     vector<KeyFrame*> vpCurrentMapKFs = pCurrentMap->GetAllKeyFrames();
     vector<MapPoint*> vpCurrentMapMPs = pCurrentMap->GetAllMapPoints();
 
@@ -1822,6 +1856,7 @@ void LoopClosing::MergeLocal()
             {
                 unique_lock<mutex> currentLock(pCurrentMap->mMutexMapUpdate); // We update the current map with the Merge information
 
+                // Step 6.1: 更新关键帧位姿
                 for(KeyFrame* pKFi : vpCurrentMapKFs)
                 {
                     if(!pKFi || pKFi->isBad() || pKFi->GetMap() != pCurrentMap)
@@ -1867,6 +1902,8 @@ void LoopClosing::MergeLocal()
                     }
 
                 }
+
+                // Step 6.2: 更新MapPoints位姿
                 for(MapPoint* pMPi : vpCurrentMapMPs)
                 {
                     if(!pMPi || pMPi->isBad()|| pMPi->GetMap() != pCurrentMap)
@@ -1899,12 +1936,14 @@ void LoopClosing::MergeLocal()
         Verbose::PrintMess("MERGE-VISUAL: Local Map stopped", Verbose::VERBOSITY_DEBUG);
 
         // Optimize graph (and update the loop position for each element form the begining to the end)
+        // Step 7: 优化 EssentialGraph
         if(mpTracker->mSensor != System::MONOCULAR)
         {
             Optimizer::OptimizeEssentialGraph(mpCurrentKF, vpMergeConnectedKFs, vpLocalCurrentWindowKFs, vpCurrentMapKFs, vpCurrentMapMPs);
         }
 
 
+        // Step 8: 更新非融合部分地图变化关系
         {
             // Get Merge Map Mutex
             unique_lock<mutex> currentLock(pCurrentMap->mMutexMapUpdate); // We update the current map with the Merge information
@@ -1961,6 +2000,7 @@ void LoopClosing::MergeLocal()
         mpThreadGBA = new thread(&LoopClosing::RunGlobalBundleAdjustment,this, pMergeMap, mpCurrentKF->mnId);
     }
 
+    // Step 9: 更新状态关系
     mpMergeMatchedKF->AddMergeEdge(mpCurrentKF);
     mpCurrentKF->AddMergeEdge(mpMergeMatchedKF);
 

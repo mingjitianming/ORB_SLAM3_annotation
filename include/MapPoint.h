@@ -213,7 +213,7 @@ public:
     long unsigned int mnBALocalForMerge;
 
     // Variable used by merging
-    cv::Mat mPosMerge;
+    cv::Mat mPosMerge;              // 地图合并后位姿
     cv::Mat mNormalVectorMerge;
 
 
